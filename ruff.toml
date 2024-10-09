@@ -13,6 +13,7 @@ exclude = [
     ".direnv",
     ".eggs",
     ".git",
+    ".gitmodules",
     ".git-rewrite",
     ".hg",
     ".ipynb_checkpoints",
