@@ -1,6 +1,10 @@
 # Deep Reinforcement Learning 
 ## Lecture by Prof. Malte Schilling at University of Muenster
 
+# Submodule usage 
+
+https://git-scm.com/book/en/v2/Git-Tools-Submodules
+
 # Reminder to use virtual environments: 
 Invoke the following in root of project
 
