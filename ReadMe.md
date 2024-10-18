@@ -1,9 +1,31 @@
 # Deep Reinforcement Learning 
 ## Lecture by Prof. Malte Schilling at University of Muenster
 
-# Submodule usage 
+# Subtree usage 
 
-https://git-scm.com/book/en/v2/Git-Tools-Submodules
+## First Time Setup 
+1. clone this repository
+2. invoke the following in root of project:
+
+	`git remote add malte-repo https://zivgitlab.uni-muenster.de/ai-systems/drl_deep_course.git`
+
+	`git remote add janosch-repo https://zivgitlab.uni-muenster.de/jbajorat/drl_intro-python.git`
+
+## Everyday use
+
+Pull new changes from external repositories:
+
+`git fetch malte-repo`
+
+`git subtree pull --prefix=drl_deep_course malte-repo main --squash`
+
+or respectively: 
+
+`git fetch janosch-repo`
+
+`git subtree pull --prefix=drl_intro_python janosch-repo main --squash`
+
+Proceed to add, commit and push changes as usual.
 
 # Reminder to use virtual environments: 
 Invoke the following in root of project
