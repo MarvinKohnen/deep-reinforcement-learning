@@ -10,17 +10,44 @@
 	\maketitle
 	
 	\section{Exercise 2.1}
-	We implemented the grid as a 5x5 matrix using np.array. We also tried to follow the gym library class, by using the functions __init__, step, reset and render (which we really didnt need in this exercise). 
+	We implemented the grid as a 5x5 matrix using np.array. We also tried to follow the gym library class, by using the functions \_\_init\_\_, step, reset and render (which we really didnt need in this exercise). 
 	\subsection{2.1a}
-	We implemented the function state_value_iteration_bellman by looping over all the grid cells and computing the state value according to the bellman equation, while handling the "jumping" of the agent for the special states. 
+	We implemented the function state\_value\_iteration\_bellman by looping over all the grid cells and computing the state value according to the bellman equation, while handling the "jumping" of the agent for the special states. 
 	The plot shows all the state values over time, as well as the state values at the final iteration, using a colormap. As expected, the cells close to the ones, where a positive reward is given, have a quite high state value, and the ones on the bottom of the grid have low state values, with the worst even being negative. 
-	As we can see, the state values converge after 10-20 iterations. Since we are using a random policy, the state values cannot change after a couple of iterations, since we are not learning anything. 
+	As we can see, the state values converge after 10-20 iterations. As we are using a random policy, the state values cannot change after a couple of iterations, since we are not learning anything. 
+	
+	\begin{figure}[h!]
+		\centering
+		\includegraphics[width=0.9\textwidth]{images/state_values.png}
+		\caption{State values over iterations and final iteration}
+		\label{fig:2}
+	\end{figure}
+		
+	\newpage
 	\subsection{2.1b}
-	We implemented the function action_value_iteration_bellman by looping over all grid cells and each action for that grid cell and computing the action value according to the bellman equation. 
-	The plots show the action values for all 4 possible direction and each grid cell, as well as all action values over time. Similarily to the first plots, we see high action values for moves onto the cells, which give out the reward, and low action values for the ones moving away from them, with the worst ones also having a negative value. 
+	We implemented the function action\_value\_iteration\_bellman by looping over all grid cells and each action for that grid cell and computing the action value according to the bellman equation. 
+	The plots show the action values for all 4 possible directions and each grid cell, as well as all action values over time. Similarily to the first plots, we see high action values for moves onto the cells, which give out the reward, and low action values for the ones moving away from them, with the worst ones also having a negative value.
+	
 	Again, the action values converge after 10-20 iterations, since the random policy doesn't adjust any actions. 
 
-	The differences between both computations is, that you also have to iterate over all actions, so the number of action values is num_actions times that of the state values. Other than that, there are no big differences in writing, as far as we can tell. 
+	The differences between both computations is, that you also have to iterate over all actions, so the number of action values is num\_actions times that of the state values. 
+	\newline
+	
+	\begin{figure}[h!]
+		\centering
+		\includegraphics[width=1\textwidth]{images/action_values_per_direction.png}
+		\caption{Action values per direction}
+		\label{fig:3}
+	\end{figure}
+	
+		\begin{figure}[h!]
+		\centering
+		\includegraphics[width=0.9\textwidth]{images/action_values.png}
+		\caption{Action Values over iterations}
+		\label{fig:4}
+	\end{figure}
+	
+	
 	
 	
 	\section{Exercise 2.2}
