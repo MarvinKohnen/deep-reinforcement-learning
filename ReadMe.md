@@ -62,5 +62,33 @@ Deactivate via `deactivate`
 
 For further information on pep8 style: https://peps.python.org/pep-0008/
 
+## Pulling assignments from main into private branch
+`git checkout julius-private`
 
+`git fetch origin`
+
+`git checkout origin/main -- assignments/`
+
+`git add assignments/`
+
+`git commit -m "Pulled assignments from main"`
+
+`git push`
+
+## Pushing assignment commits from private branch into main
+
+Checkout main
+`git checkout main`
+
+Find commit hash of commit to be pushed in private branch
+`git cherry-pick <commit_hash>`
+
+If there are merge conflicts:
+`git add <resolved-files>`
+
+Continue cherry picking:
+`git cherry-pick --continue`
+
+Push to main:
+`git push origin main`
 
