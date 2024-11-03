@@ -39,7 +39,7 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
+# Unit tmp / coverage reports
 htmlcov/
 .tox/
 .nox/
@@ -148,3 +148,5 @@ intropy/autograded
 intropy/submitted
 intropy/feedback
 intropy/config/data
+
+.idea/*
