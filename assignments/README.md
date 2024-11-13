@@ -1,1 +1,0 @@
-# (Bi)weekly assignments
