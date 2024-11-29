@@ -25,6 +25,13 @@ or respectively:
 
 `git subtree pull --prefix=drl_intro_python janosch-repo main --squash`
 
+
+or respectively:
+
+`git fetch simon-repo`
+
+`git subtree pull --prefix=drl_deep_project simon-repo main --squash`
+
 Proceed to add, commit and push changes as usual.
 
 # Reminder to use virtual environments: 
