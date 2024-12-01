@@ -11,6 +11,8 @@
 
 	`git remote add janosch-repo https://zivgitlab.uni-muenster.de/jbajorat/drl_intro-python.git`
 
+	`git remote add simon-repo https://zivgitlab.uni-muenster.de/ai-systems/bomberman_rl.git`
+
 ## Everyday use
 
 Pull new changes from external repositories:
