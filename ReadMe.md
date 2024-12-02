@@ -11,6 +11,8 @@
 
 	`git remote add janosch-repo https://zivgitlab.uni-muenster.de/jbajorat/drl_intro-python.git`
 
+	`git remote add simon-repo https://zivgitlab.uni-muenster.de/ai-systems/bomberman_rl.git`
+
 ## Everyday use
 
 Pull new changes from external repositories:
@@ -24,6 +26,13 @@ or respectively:
 `git fetch janosch-repo`
 
 `git subtree pull --prefix=drl_intro_python janosch-repo main --squash`
+
+
+or respectively:
+
+`git fetch simon-repo`
+
+`git subtree pull --prefix=drl_deep_project simon-repo main --squash`
 
 Proceed to add, commit and push changes as usual.
 
