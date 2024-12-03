@@ -44,13 +44,18 @@ class RuleBasedAgent:
 
         # Get scope representation
         scope_representation = self.get_scope_representation(state)
-        print("Scope representation:\n", self.format_array(scope_representation))
+        print(
+            "Scope representation:\n",
+            self.format_array(scope_representation.transpose()),
+        )
 
         # Get valid actions
         valid_actions = self.get_valid_actions(state, scope_representation)
         print("Valid actions:", [Actions(action).name for action in valid_actions])
 
         # Choose a random valid action
+        if valid_actions == []:
+            valid_actions.append(Actions.WAIT.value)
         action = np.random.choice(valid_actions)
         print("Chosen action:", Actions(action).name)
         return action
@@ -63,7 +68,8 @@ class RuleBasedAgent:
         danger_map = self.get_danger_map(state)
         # print("Danger map:\n", self.format_array(danger_map))
         scope_representation = danger_map
-        scope_representation[self.position[0], self.position[1]] = 2
+        if not scope_representation[self.position[0], self.position[1]] == -20:
+            scope_representation[self.position[0], self.position[1]] = 2
         # Traverse the board and mark reachable positions using BFS
         # Mark 1 for reachable positions, 0 for unreachable positions, -10 for walls, -9 for crates, -1 for bombs and ??? explosions
 
@@ -85,24 +91,33 @@ class RuleBasedAgent:
     def get_danger_map(self, state):
         bombs = -1 * state["bombs"]
         walls = -10 * state["walls"]
-        danger_map = bombs + walls
+        explosions = -20 * (state["explosions"] // 10)
+        danger_map = bombs + walls + explosions
 
         for i in range(danger_map.shape[0]):
             for j in range(danger_map.shape[1]):
-                if danger_map[i, j] == -3 or danger_map[i, j] == -4:
-                    danger_map[i, j] = -1
+                """
+                if (
+                    danger_map[i, j] == -2
+                    or danger_map[i, j] == -3
+                    or danger_map[i, j] == -4
+                ):"""
+                if -5 < danger_map[i, j] < 0:
+                    radius = abs(danger_map[i, j])
+
+                    danger_map[i, j] = -20
                     wall_hit_up = False
                     wall_hit_right = False
                     wall_hit_down = False
                     wall_hit_left = False
 
-                    for k in range(1, 4):
+                    for k in range(1, radius):
                         if (
                             i + k < danger_map.shape[0]
                             and danger_map[i + k, j] != -10
                             and not wall_hit_up
                         ):
-                            danger_map[i + k, j] = -1
+                            danger_map[i + k, j] = -20
                         if i + k < danger_map.shape[0] and danger_map[i + k, j] == -10:
                             wall_hit_up = True
                         if (
@@ -110,7 +125,7 @@ class RuleBasedAgent:
                             and danger_map[i, j + k] != -10
                             and not wall_hit_right
                         ):
-                            danger_map[i, j + k] = -1
+                            danger_map[i, j + k] = -20
                         if j + k < danger_map.shape[1] and danger_map[i, j + k] == -10:
                             wall_hit_right = True
                         if (
@@ -118,7 +133,7 @@ class RuleBasedAgent:
                             and danger_map[i - k, j] != -10
                             and not wall_hit_down
                         ):
-                            danger_map[i - k, j] = -1
+                            danger_map[i - k, j] = -20
                         if i - k >= 0 and danger_map[i - k, j] == -10:
                             wall_hit_down = True
                         if (
@@ -126,9 +141,10 @@ class RuleBasedAgent:
                             and danger_map[i, j - k] != -10
                             and not wall_hit_left
                         ):
-                            danger_map[i, j - k] = -1
+                            danger_map[i, j - k] = -20
                         if j - k >= 0 and danger_map[i, j - k] == -10:
                             wall_hit_left = True
+
         return danger_map
 
     def get_valid_actions(self, state, scope_representation):
@@ -138,6 +154,7 @@ class RuleBasedAgent:
         explosions = state["explosions"]
         # Check if bombs are left
         valid_actions = []
+        # bomb_allowed = self.check_squares(scope_representation)
         if self.bombs_left > 0:
             valid_actions.append(Actions.BOMB.value)
         # Check if we can wait (not standing on bomb or explosion)
@@ -151,6 +168,27 @@ class RuleBasedAgent:
             if scope_representation[new_pos[0], new_pos[1]] == 1:
                 valid_actions.append(self.directions.index(d))
         return valid_actions
+
+    """
+    def check_squares(self, scope_representation):
+        bomb_allowed = False
+
+        # 4 in horizontal oder vertikal frei 
+        if scope_representation[self.position[0] + 4] == 1 and scope_representation[self.position[0] + 4] < scope_representation.shape[0] \
+        or scope_representation[self.position[1] + 4] == 1 and scope_representation[self.position[1] + 4] < scope_representation.shape[0] \
+        or scope_representation[self.position[0] - 4] == 1 and scope_representation[self.position[0] - 4] < scope_representation.shape[0] \
+        or scope_representation[self.position[1] - 4] == 1 and scope_representation[self.position[1] - 4] < scope_representation.shape[0]:
+            bomb_allowed = True
+
+        # Diagonal frei?
+        if scope_representation[self.position[0] + 1] == 1 and scope_representation[self.position[0] + 4] < scope_representation.shape[0] \i
+
+
+     
+
+
+        return bomb_allowed
+    """
 
     def format_array(self, array):
         # Calculate the width needed to align all numbers correctly
