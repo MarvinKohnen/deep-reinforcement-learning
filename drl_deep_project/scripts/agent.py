@@ -63,6 +63,8 @@ class RuleBasedAgent:
     def get_scope_representation(self, state):
         walls = state["walls"]
         crates = state["crates"]
+        coins = state["coins"]
+        opponents = state["opponents_pos"]
 
         # Initialize reachable positions (self.position is marked as a 2) and danger map into one array
         danger_map = self.get_danger_map(state)
@@ -82,6 +84,11 @@ class RuleBasedAgent:
                 # Mark crates
                 if crates[new_pos[0], new_pos[1]] == 1:
                     scope_representation[new_pos[0], new_pos[1]] = -9
+                if (
+                    coins[new_pos[0], new_pos[1]] == 1
+                    and scope_representation[new_pos[0], new_pos[1]] >= 0
+                ):
+                    scope_representation[new_pos[0], new_pos[1]] = 10
                 # Mark reachable positions
                 if scope_representation[new_pos[0], new_pos[1]] == 0:
                     scope_representation[new_pos[0], new_pos[1]] = 1
@@ -163,8 +170,12 @@ class RuleBasedAgent:
         for d in self.directions:
             new_pos = (self.position[0] + d[0], self.position[1] + d[1])
             # print("Using direction:", d, "corresponding to Action:", Actions(self.directions.index(d)).name, "to get new position:", new_pos)
-            if scope_representation[new_pos[0], new_pos[1]] == 1:
+            if scope_representation[new_pos[0], new_pos[1]] > 0:
                 valid_actions.append(self.directions.index(d))
+
+        coins_found, directions_to_the_money = self.check_for_coins(
+            scope_representation
+        )
 
         bomb_allowed, _ = self.check_squares(state, scope_representation)
 
@@ -173,11 +184,19 @@ class RuleBasedAgent:
 
         if scope_representation[self.position[0], self.position[1]] == -1:
             _, direction_escape = self.check_squares(state, scope_representation)
-            for test in valid_actions.copy():
-                print(f"Action in valid_actions: {test}")
-                if test not in direction_escape:
-                    valid_actions.remove(test)
-                    print(f"removed the following action: {Actions(test).name}")
+            for action in valid_actions.copy():
+                print(f"Action in valid_actions: {action}")
+                if action not in direction_escape:
+                    valid_actions.remove(action)
+                    print(f"removed the following action: {Actions(action).name}")
+
+        print("Coins Found.")
+        print(f"Direction to Coin: {directions_to_the_money}")
+        if coins_found and scope_representation[self.position] > 0:
+            for action in valid_actions.copy():
+                if action not in directions_to_the_money:
+                    valid_actions.remove(action)
+                    print(f"removed the following action: {Actions(action).name}")
 
         return valid_actions
 
@@ -264,6 +283,28 @@ class RuleBasedAgent:
             bomb_wish = True
 
         return bomb_allowed and bomb_wish, list(set(direction))
+
+    def check_for_coins(self, scope_representation):
+        # Simply implement pathfinding at this point lol
+
+        coins_found = False
+        direction = []
+
+        for i in range(scope_representation.shape[0]):
+            for j in range(scope_representation.shape[1]):
+                if scope_representation[i, j] == 10:
+                    coins_found = True
+
+                    if self.position[1] < j:
+                        direction.append(2)  # down
+                    if self.position[1] > j:
+                        direction.append(0)  # up
+                    if self.position[0] < i:
+                        direction.append(1)  # right
+                    if self.position[0] > i:
+                        direction.append(3)  # left
+
+        return coins_found, list(set(direction))
 
     def format_array(self, array):
         # Calculate the width needed to align all numbers correctly
