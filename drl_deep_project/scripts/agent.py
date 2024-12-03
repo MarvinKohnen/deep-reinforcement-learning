@@ -89,6 +89,12 @@ class RuleBasedAgent:
                     and scope_representation[new_pos[0], new_pos[1]] >= 0
                 ):
                     scope_representation[new_pos[0], new_pos[1]] = 10
+                if (
+                    opponents[new_pos[0], new_pos[1]] == 1
+                    and scope_representation[new_pos[0], new_pos[1]] >= 0
+                ):
+                    scope_representation[new_pos[0], new_pos[1]] = -50
+
                 # Mark reachable positions
                 if scope_representation[new_pos[0], new_pos[1]] == 0:
                     scope_representation[new_pos[0], new_pos[1]] = 1
@@ -273,12 +279,16 @@ class RuleBasedAgent:
         if (
             scope_representation.shape[0] > self.position[0] + 1
             and scope_representation[self.position[0] + 1, self.position[1]] == -9
+            or scope_representation[self.position[0] + 1, self.position[1]] == -50
             or scope_representation.shape[1] > self.position[1] + 1
             and scope_representation[self.position[0], self.position[1] + 1] == -9
+            or scope_representation[self.position[0] + 1, self.position[1]] == -50
             or 0 < self.position[0] - 1
             and scope_representation[self.position[0] - 1, self.position[1]] == -9
+            or scope_representation[self.position[0] + 1, self.position[1]] == -50
             or 0 < self.position[1] - 1
             and scope_representation[self.position[0], self.position[1] - 1] == -9
+            or scope_representation[self.position[0] + 1, self.position[1]] == -50
         ):
             bomb_wish = True
 
