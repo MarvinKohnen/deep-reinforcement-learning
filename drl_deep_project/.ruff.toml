@@ -1,3 +1,0 @@
-line-length = 88  # Set the line length
-select = ["E", "F", "W", "I"]  # Specify rules (similar to Flake8)
-exclude = ["migrations/", "__pycache__/"]  # Exclude specific directories
