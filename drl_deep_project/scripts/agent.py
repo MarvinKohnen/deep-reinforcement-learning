@@ -68,7 +68,7 @@ class RuleBasedAgent:
         danger_map = self.get_danger_map(state)
         # print("Danger map:\n", self.format_array(danger_map))
         scope_representation = danger_map
-        if not scope_representation[self.position[0], self.position[1]] == -20:
+        if not scope_representation[self.position[0], self.position[1]] < 0:
             scope_representation[self.position[0], self.position[1]] = 2
         # Traverse the board and mark reachable positions using BFS
         # Mark 1 for reachable positions, 0 for unreachable positions, -10 for walls, -9 for crates, -1 for bombs and ??? explosions
@@ -105,7 +105,7 @@ class RuleBasedAgent:
                 if -5 < danger_map[i, j] < 0:
                     radius = abs(danger_map[i, j])
 
-                    danger_map[i, j] = -20
+                    # danger_map[i, j] = -20
                     wall_hit_up = False
                     wall_hit_right = False
                     wall_hit_down = False
@@ -154,9 +154,7 @@ class RuleBasedAgent:
         explosions = state["explosions"]
         # Check if bombs are left
         valid_actions = []
-        # bomb_allowed = self.check_squares(scope_representation)
-        if self.bombs_left > 0:
-            valid_actions.append(Actions.BOMB.value)
+
         # Check if we can wait (not standing on bomb or explosion)
         if scope_representation[self.position] > 0:
             valid_actions.append(Actions.WAIT.value)
@@ -167,28 +165,105 @@ class RuleBasedAgent:
             # print("Using direction:", d, "corresponding to Action:", Actions(self.directions.index(d)).name, "to get new position:", new_pos)
             if scope_representation[new_pos[0], new_pos[1]] == 1:
                 valid_actions.append(self.directions.index(d))
+
+        bomb_allowed, _ = self.check_squares(state, scope_representation)
+
+        if self.bombs_left > 0 and bomb_allowed:
+            return [Actions.BOMB.value]
+
+        if scope_representation[self.position[0], self.position[1]] == -1:
+            _, direction_escape = self.check_squares(state, scope_representation)
+            for test in valid_actions.copy():
+                print(f"Action in valid_actions: {test}")
+                if test not in direction_escape:
+                    valid_actions.remove(test)
+                    print(f"removed the following action: {Actions(test).name}")
+
         return valid_actions
 
-    """
-    def check_squares(self, scope_representation):
+    def check_squares(self, state, scope_representation):
+        # Simply implement pathfinding at this point lol
         bomb_allowed = False
-
-        # 4 in horizontal oder vertikal frei 
-        if scope_representation[self.position[0] + 4] == 1 and scope_representation[self.position[0] + 4] < scope_representation.shape[0] \
-        or scope_representation[self.position[1] + 4] == 1 and scope_representation[self.position[1] + 4] < scope_representation.shape[0] \
-        or scope_representation[self.position[0] - 4] == 1 and scope_representation[self.position[0] - 4] < scope_representation.shape[0] \
-        or scope_representation[self.position[1] - 4] == 1 and scope_representation[self.position[1] - 4] < scope_representation.shape[0]:
+        bomb_wish = False
+        direction = []
+        # 4 in horizontal oder vertikal frei
+        if (
+            scope_representation.shape[0] > self.position[0] + 4
+            and scope_representation[self.position[0] + 4, self.position[1]] == 1
+        ):
+            print("found path horizontal: right")
             bomb_allowed = True
+            direction.append(1)  # right
+
+        if (
+            scope_representation.shape[1] > self.position[1] + 4
+            and scope_representation[self.position[0], self.position[1] + 4] == 1
+        ):
+            print("found path vertikal: down ")
+            bomb_allowed = True
+            direction.append(2)  # down
+
+        if (
+            0 < self.position[0] - 4
+            and scope_representation[self.position[0] - 4, self.position[1]] == 1
+        ):
+            print("found path horizontal: left")
+            bomb_allowed = True
+            direction.append(3)  # left
+
+        if (
+            0 < self.position[1] - 4
+            and scope_representation[self.position[0], self.position[1] - 4] == 1
+        ):
+            print("found path vertiakl: up")
+            bomb_allowed = True
+            direction.append(0)  # up
 
         # Diagonal frei?
-        if scope_representation[self.position[0] + 1] == 1 and scope_representation[self.position[0] + 4] < scope_representation.shape[0] \i
+        for i in range(
+            max(0, self.position[0] - 4),
+            min(self.position[0] + 4, scope_representation.shape[0]),
+        ):
+            for j in range(
+                max(0, self.position[1] - 4),
+                min(self.position[1] + 4, scope_representation.shape[1]),
+            ):
+                if (
+                    i != self.position[0]
+                    and j != self.position[1]
+                    and scope_representation[i, j] == 1
+                ):
+                    bomb_allowed = True
+                    delta_i = abs(i - self.position[0])
+                    delta_j = abs(j - self.position[1])
+                    if delta_i <= delta_j:
+                        if self.position[1] < j:
+                            print("found path eck")
+                            direction.append(2)  # down
+                        if self.position[1] > j:
+                            print("found path eck")
+                            direction.append(0)  # up
+                    if delta_j <= delta_i:
+                        if self.position[0] < i:
+                            print("found path eck")
+                            direction.append(1)  # right
+                        if self.position[0] > i:
+                            print("found path eck")
+                            direction.append(3)  # left
 
+        if (
+            scope_representation.shape[0] > self.position[0] + 1
+            and scope_representation[self.position[0] + 1, self.position[1]] == -9
+            or scope_representation.shape[1] > self.position[1] + 1
+            and scope_representation[self.position[0], self.position[1] + 1] == -9
+            or 0 < self.position[0] - 1
+            and scope_representation[self.position[0] - 1, self.position[1]] == -9
+            or 0 < self.position[1] - 1
+            and scope_representation[self.position[0], self.position[1] - 1] == -9
+        ):
+            bomb_wish = True
 
-     
-
-
-        return bomb_allowed
-    """
+        return bomb_allowed and bomb_wish, list(set(direction))
 
     def format_array(self, array):
         # Calculate the width needed to align all numbers correctly
