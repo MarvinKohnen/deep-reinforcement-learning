@@ -6,9 +6,8 @@ from gymnasium.wrappers import RecordVideo
 
 from bomberman_rl import settings as s, Actions, Bomberman
 
-from random_agent.agent import RandomAgent
-from elias_working_agent import EliasWorkingAgent
-from agent import RuleBaseAgent
+# from random_agent.agent
+from agent import RuleBasedAgent
 
 
 def parse(argv=None):
@@ -118,9 +117,7 @@ def main(argv=None):
         env = RecordVideo(env, video_folder=args.video, name_prefix=args.match_name)
 
     # Agent setup
-    # agent = RandomAgent()
-    # agent = EliasWorkingAgent()
-    agent = RuleBaseAgent()
+    agent = RuleBasedAgent()
     agent.setup()
     if args.train:
         agent.setup_training()
