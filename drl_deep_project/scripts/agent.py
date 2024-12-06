@@ -1,3 +1,14 @@
+"""
+ReadMe Mini:
+
+This code was assembled by
+Moritz Gehring (562817)
+Julius Ferber (561606)
+Marvin Kohnen (462674)
+
+GLHF
+"""
+
 from bomberman_rl import Actions
 import numpy as np
 
@@ -216,7 +227,6 @@ class RuleBasedAgent:
             scope_representation.shape[0] > self.position[0] + 4
             and scope_representation[self.position[0] + 4, self.position[1]] == 1
         ):
-            print("found path horizontal: right")
             bomb_allowed = True
             direction.append(1)  # right
 
@@ -224,7 +234,6 @@ class RuleBasedAgent:
             scope_representation.shape[1] > self.position[1] + 4
             and scope_representation[self.position[0], self.position[1] + 4] == 1
         ):
-            print("found path vertikal: down ")
             bomb_allowed = True
             direction.append(2)  # down
 
@@ -232,7 +241,6 @@ class RuleBasedAgent:
             0 < self.position[0] - 4
             and scope_representation[self.position[0] - 4, self.position[1]] == 1
         ):
-            print("found path horizontal: left")
             bomb_allowed = True
             direction.append(3)  # left
 
@@ -240,7 +248,6 @@ class RuleBasedAgent:
             0 < self.position[1] - 4
             and scope_representation[self.position[0], self.position[1] - 4] == 1
         ):
-            print("found path vertiakl: up")
             bomb_allowed = True
             direction.append(0)  # up
 
@@ -263,17 +270,13 @@ class RuleBasedAgent:
                     delta_j = abs(j - self.position[1])
                     if delta_i <= delta_j:
                         if self.position[1] < j:
-                            print("found path eck")
                             direction.append(2)  # down
                         if self.position[1] > j:
-                            print("found path eck")
                             direction.append(0)  # up
                     if delta_j <= delta_i:
                         if self.position[0] < i:
-                            print("found path eck")
                             direction.append(1)  # right
                         if self.position[0] > i:
-                            print("found path eck")
                             direction.append(3)  # left
 
         if (
