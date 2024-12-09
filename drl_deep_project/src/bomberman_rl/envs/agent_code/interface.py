@@ -1,6 +1,4 @@
-from bomberman_rl import Actions
-import numpy as np
-
+from logging import Logger
 
 class RuleBasedAgent:
     """
@@ -9,11 +7,12 @@ class RuleBasedAgent:
     """
 
     def __init__(self):
+        self.logger = Logger("Agent")
         self.setup()
 
     def setup(self):
         """
-        Before episode. Use this to setup action related state that is required to act on the environment.
+        Before episode (optional). Use this to setup action related state that is required to act on the environment.
         """
         # For tracking own position and history
         self.position = None
@@ -21,7 +20,7 @@ class RuleBasedAgent:
         self.score = 0
         self.directions = [(0, -1), (1, 0), (0, 1), (-1, 0)]  # UP, RIGHT, DOWN, LEFT
 
-    def act(self, state: dict) -> int:
+    def act(self, state, **kwargs) -> int:
         """
         Before step. Return action based on state.
 
@@ -328,9 +327,11 @@ class RuleBasedAgent:
         )
 
 
-class RLAgent(RuleBasedAgent):
+class LearningAgent(RuleBasedAgent):
     """
-    An agent that wants to learn can profit from further Callbacks.
+    A learning agent (located within the environment package) profits from further callbacks.
+    If you manually operate on the environment, like from ``/scripts``, it is not strictly necessary to follow this interface.
+    However, the example training loop in main.py supports this interface by calling the respective callbacks.
     (Demonstration only - do not inherit)
     """
 
@@ -346,10 +347,10 @@ class RLAgent(RuleBasedAgent):
 
     def game_events_occurred(
         self,
-        old_state: dict,
-        self_action: str,
-        new_state: dict,
-        events: list[str],
+        old_state,
+        self_action,
+        new_state,
+        events,
     ):
         """
         After step in environment (optional). Use this e.g. for model training.
