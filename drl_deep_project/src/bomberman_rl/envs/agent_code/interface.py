@@ -1,4 +1,6 @@
 from logging import Logger
+from bomberman_rl import Actions
+import numpy as np
 
 class RuleBasedAgent:
     """
