@@ -19,17 +19,14 @@ class Item(object):
         raise NotImplementedError()
 
 
-def loadScaledAvatar(path: str | bytes, expected_size: list[int] = None):
+def loadScaledAvatar(path: str | bytes, expected_size: list[int] = [30, 30]):
     # load
     if isinstance(path, bytes):
         avatar = pygame.image.load(BytesIO(path))
     else:
         avatar = pygame.image.load(path)
-    if expected_size is not None:
-        assert avatar.get_size() == expected_size
     # scale
-    width, height = avatar.get_width(), avatar.get_height()
-    width, height = width * s.SCALE, height * s.SCALE
+    width, height = expected_size[0] * s.SCALE, expected_size[1] * s.SCALE
     avatar = pygame.transform.scale(avatar, (width, height))
     return avatar
 

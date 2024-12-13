@@ -12,28 +12,10 @@ import pygame
 
 from . import settings as s
 from . import events as e
+from .actions import Actions
+from .state_space import legacy2gym
 from .agents import Agent, SequentialAgentBackend
 from .items import Bomb, Coin, Explosion, loadScaledAvatar
-
-WorldArgs = namedtuple(
-    "WorldArgs",
-    [
-        "no_gui",
-        "fps",
-        "turn_based",
-        "update_interval",
-        "save_replay",
-        "replay",
-        "make_video",
-        "continue_without_training",
-        "log_dir",
-        "save_stats",
-        "match_name",
-        "seed",
-        "silence_errors",
-        "scenario",
-    ],
-)
 
 
 class Trophy:
@@ -63,14 +45,13 @@ class GenericWorld:
 
     round_id: str
 
-    def __init__(self, args: WorldArgs):
+    def __init__(self, args):
         self.args = args
         self.setup_logging()
         self.colors = list(s.AGENT_COLORS)
         self.round = 0
         self.round_statistics = {}
         self.running = False
-        self.user_input = None
 
     def setup_logging(self):
         self.logger = logging.getLogger("BombeRLeWorld")
@@ -83,9 +64,6 @@ class GenericWorld:
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
         self.logger.info("Initializing game world")
-
-    def _opponent_agents(self):
-        return [a for a in self.active_agents if not a.env_user]
 
     def new_round(self):
         if self.running:
@@ -108,6 +86,7 @@ class GenericWorld:
 
         # Arena with wall and crate layout
         self.arena, self.coins, self.active_agents = self.build_arena()
+        self.killed_agents = []
 
         for agent in self.active_agents:
             agent.start_round()
@@ -129,7 +108,7 @@ class GenericWorld:
 
         color = self.colors.pop()
         agent = Agent(
-            name, agent_dir, name, train, backend, color, color, env_user=env_user
+            name, agent_dir, name, train, backend, color=color, env_user=env_user
         )
         self.agents.append(agent)
 
@@ -140,8 +119,12 @@ class GenericWorld:
                 is_free = is_free and (obstacle.x != x or obstacle.y != y)
         return is_free
 
-    def perform_agent_action(self, agent: Agent, action: str):
+    def perform_agent_action(self, agent: Agent, action):
         # Perform the specified action if possible, wait otherwise
+        try:
+            action = Actions(action)._name_
+        except ValueError:
+            agent.add_event(e.INVALID_ACTION)
         if action == "UP" and self.tile_is_free(agent.x, agent.y - 1):
             agent.y -= 1
             agent.add_event(e.MOVED_UP)
@@ -178,13 +161,11 @@ class GenericWorld:
     def send_game_events(self):
         pass
 
-    def do_step(self, action, user_input="WAIT"):
+    def do_step(self, env_user_action):
         assert self.running
         self.step += 1
         self.logger.info(f"STARTING STEP {self.step}")
-        self.user_input = user_input
-        self.logger.debug(f"User input: {self.user_input}")
-        self.poll_and_run_agents(action)
+        self.poll_and_run_agents(env_user_action)
 
         # Progress world elements based
         self.collect_coins()
@@ -280,6 +261,10 @@ class GenericWorld:
                         # Note who killed whom, adjust scores
                         if a is explosion.owner:
                             self.logger.info(f"Agent <{a.name}> blown up by own bomb")
+                            self.logger.info(
+                                f"Agent <{a.name}> loses {-s.REWARD_KILL_SELF} points"
+                            )
+                            a.update_score(s.REWARD_KILL_SELF)
                             a.add_event(e.KILLED_SELF)
                             explosion.owner.trophies.append(Trophy.suicide_trophy)
                         else:
@@ -287,7 +272,7 @@ class GenericWorld:
                                 f"Agent <{a.name}> blown up by agent <{explosion.owner.name}>'s bomb"
                             )
                             self.logger.info(
-                                f"Agent <{explosion.owner.name}> receives 1 point"
+                                f"Agent <{explosion.owner.name}> receives {s.REWARD_KILL} points"
                             )
                             explosion.owner.update_score(s.REWARD_KILL)
                             explosion.owner.add_event(e.KILLED_OPPONENT)
@@ -299,10 +284,10 @@ class GenericWorld:
         for a in agents_hit:
             a.dead = True
             self.active_agents.remove(a)
+            self.killed_agents.append(a)
             a.add_event(e.GOT_KILLED)
             for aa in self.active_agents:
-                if aa is not a:
-                    aa.add_event(e.OPPONENT_ELIMINATED)
+                aa.add_event(e.OPPONENT_ELIMINATED)
 
     def end_round(self):
         if not self.running:
@@ -322,35 +307,7 @@ class GenericWorld:
         }
 
     def time_to_stop(self):
-        # Check round stopping criteria
-        if len(self.active_agents) == len(self._opponent_agents()):
-            self.logger.info("Env user dead, wrap up round")
-            return True
-
-        # TODO check below for need for adaption
-        if (
-            len(self.active_agents) == 1
-            and (self.arena == 1).sum() == 0
-            and all([not c.collectable for c in self.coins])
-            and len(self.bombs) + len(self.explosions) == 0
-        ):
-            self.logger.info("One agent left alive with nothing to do, wrap up round")
-            return True
-
-        if (
-            any(a.train for a in self.agents)
-            and not self.args.continue_without_training
-        ):
-            if not any([a.train for a in self.active_agents]):
-                self.logger.info("No training agent left alive, wrap up round")
-                return True
-
-        # TODO exchange for truncated wrapper
-        if self.step >= s.MAX_STEPS:
-            self.logger.info("Maximum number of steps reached, wrap up round")
-            return True
-
-        return False
+        raise NotImplementedError()
 
     def end(self):
         if self.running:
@@ -379,9 +336,10 @@ class GenericWorld:
 
 
 class BombeRLeWorld(GenericWorld):
-    def __init__(self, args: WorldArgs, agents):
+    def __init__(self, args, agents):
         super().__init__(args)
         self.rng = np.random.default_rng(args.seed)
+        self.scenario_info = s.SCENARIOS[self.args.scenario]
         self.setup_agents(agents)
 
     def setup_agents(self, agents):
@@ -396,21 +354,22 @@ class BombeRLeWorld(GenericWorld):
                     + str(list([a.code_name for a in self.agents]).count(agent_dir))
                 )
             else:
-                name = agent_dir
-            # Implicitly, first agent is controlled by env user
+                name = agent_dir.split(".")[-1]
             self.add_agent(agent_dir, name, train=train, env_user=not flag_opponent)
+            # Implicitly, first agent is controlled by env user
             flag_opponent += 1
 
     def build_arena(self):
+        if self.scenario_info["TYPE"] != "BASIC":
+            return self.build_custom_arena()
+        
         WALL = -1
         FREE = 0
         CRATE = 1
         arena = np.zeros((s.COLS, s.ROWS), int)
 
-        scenario_info = s.SCENARIOS[self.args.scenario]
-
         # Crates in random locations
-        arena[self.rng.random((s.COLS, s.ROWS)) < scenario_info["CRATE_DENSITY"]] = (
+        arena[self.rng.random((s.COLS, s.ROWS)) < self.scenario_info["CRATE_DENSITY"]] = (
             CRATE
         )
 
@@ -444,7 +403,7 @@ class BombeRLeWorld(GenericWorld):
         crate_positions = self.rng.permutation(all_positions[arena == CRATE])
         free_positions = self.rng.permutation(all_positions[arena == FREE])
         coin_positions = np.concatenate([crate_positions, free_positions], 0)[
-            : scenario_info["COIN_COUNT"]
+            : self.scenario_info["COIN_COUNT"]
         ]
         for x, y in coin_positions:
             coins.append(Coin((x, y), collectable=arena[x, y] == FREE))
@@ -453,6 +412,48 @@ class BombeRLeWorld(GenericWorld):
         active_agents = []
         for agent, start_position in zip(
             self.agents, self.rng.permutation(start_positions)
+        ):
+            active_agents.append(agent)
+            agent.x, agent.y = start_position
+
+        return arena, coins, active_agents
+    
+
+    def build_custom_arena(self):
+        match self.scenario_info["TYPE"]:
+            case "SINGLE_COIN":
+                return self.build_single_coin_arena()
+            case _:
+                raise NotImplementedError(f"Scenario of type {self.scenario_info["TYPE"]} not implemented.")
+            
+    def build_single_coin_arena(self):
+        fixed = self.scenario_info["FIXED"]
+
+        WALL = -1
+        arena = np.zeros((s.COLS, s.ROWS), int)
+
+        # Walls
+        arena[:1, :] = WALL
+        arena[-1:, :] = WALL
+        arena[:, :1] = WALL
+        arena[:, -1:] = WALL
+
+        # Start positions
+        start_positions = list(set([
+            (1, 1),
+            (s.COLS - 2, 1),
+            (1, s.ROWS - 2),
+            (s.COLS - 2, s.ROWS - 2),
+        ]))
+        assert(len(self.agents)) < len(start_positions), f"This scenario supports only {len(start_positions) - 1} agents for altogether {len(start_positions)} available start positions"
+
+        if not fixed:
+            start_positions = list(self.rng.permutation(start_positions))
+
+        coins = [Coin(start_positions.pop(), collectable=True)]
+        active_agents = []
+        for agent, start_position in zip(
+            sorted(self.agents, key=lambda a: a.env_user, reverse=True), start_positions
         ):
             active_agents.append(agent)
             agent.x, agent.y = start_position
@@ -469,80 +470,81 @@ class BombeRLeWorld(GenericWorld):
             "field": np.array(self.arena),
             "self": agent.get_state(),
             "others": [
-                other.get_state() for other in self.active_agents if other is not agent
+                other.get_state() for other in self.agents if other is not agent # in self.active_agents if other is not agent
             ],
             "bombs": [bomb.get_state() for bomb in self.bombs],
             "coins": [coin.get_state() for coin in self.coins if coin.collectable],
-            "user_input": self.user_input,
         }
 
         explosion_map = np.zeros(state["field"].shape, dtype="int16")
         for (x, y), stage, timer in [e.get_state() for e in self.explosions]:
             explosion_map[x, y] = (1 - stage) * 10 + timer
 
-        #explosion_map = np.zeros(self.arena.shape)
-        #for exp in self.explosions:
-        #    if exp.is_dangerous():
-        #        for x, y in exp.blast_coords:
-        #            explosion_map[x, y] = max(explosion_map[x, y], exp.timer - 1)
-
         state["explosion_map"] = explosion_map
         return state
+    
+    def leaderboard(self):
+        sorted_agents = [(a.name, a.score) for a in self.agents]
+        sorted_agents.sort(reverse=True, key=lambda a: a[1])
+        result = {
+            name: score for name, score in sorted_agents
+        }
+        return result
 
     def poll_and_run_agents(self, env_user_action):
         for a in self.active_agents:
             state = self.get_state_for_agent(a)
+            state = legacy2gym(state)
             a.store_game_state(state)
             a.reset_game_events()
-            if a.available_think_time > 0 and not a.env_user:
-                a.act(state)
+            if a.available_think_time > 0:
+                a.act(state, env_user_action=env_user_action)
 
         # Give agents time to decide
         perm = self.rng.permutation(len(self.active_agents))
         for i in perm:
             a = self.active_agents[i]
-            if a.env_user:
-                self.logger.info(f"Agent <{a.name}> chose action {env_user_action}.")
-                self.perform_agent_action(a, env_user_action)
-            else:
-                if a.available_think_time > 0:
-                    try:
-                        action, think_time = a.wait_for_act()
-                    except KeyboardInterrupt:
-                        # Stop the game
+            if a.available_think_time > 0:
+                try:
+                    action, think_time = a.wait_for_act()
+                except KeyboardInterrupt:
+                    # Stop the game
+                    raise
+                except:
+                    if not self.args.silence_errors:
+                        msg = f"Exception raised by Agent <{a.name}>. Agent set to passive for the rest of the episode."
+                        self.logger.error(msg)
+                        print(msg)
                         raise
-                    except:
-                        if not self.args.silence_errors:
-                            raise
-                        # Agents with errors cannot continue
-                        action = "ERROR"
-                        think_time = float("inf")
+                    # Agents with errors cannot continue
+                    action = "ERROR"
+                    think_time = float("inf")
 
-                    self.logger.info(
-                        f"Agent <{a.name}> chose action {action} in {think_time:.2f}s."
+                self.logger.info(
+                    f"Agent <{a.name}> chose action {action} in {think_time:.2f}s."
+                )
+                if think_time > a.available_think_time:
+                    next_think_time = a.base_timeout - (
+                        think_time - a.available_think_time
                     )
-                    if think_time > a.available_think_time:
-                        next_think_time = a.base_timeout - (
-                            think_time - a.available_think_time
-                        )
-                        self.logger.warning(
-                            f'Agent <{a.name}> exceeded think time by {think_time - a.available_think_time:.2f}s. Setting action to "WAIT" and decreasing available time for next round to {next_think_time:.2f}s.'
-                        )
-                        action = "WAIT"
-                        a.trophies.append(Trophy.time_trophy)
-                        a.available_think_time = next_think_time
-                    else:
-                        self.logger.info(
-                            f"Agent <{a.name}> stayed within acceptable think time."
-                        )
-                        a.available_think_time = a.base_timeout
+                    self.logger.warning(
+                        f'Agent <{a.name}> exceeded think time by {think_time - a.available_think_time:.2f}s. Setting action to "WAIT" and decreasing available time for next round to {next_think_time:.2f}s.'
+                    )
+                    action = Actions._member_map_["WAIT"]
+                    a.trophies.append(Trophy.time_trophy)
+                    a.available_think_time = next_think_time
                 else:
                     self.logger.info(
-                        f"Skipping agent <{a.name}> because of last slow think time."
+                        f"Agent <{a.name}> stayed within acceptable think time."
                     )
-                    a.available_think_time += a.base_timeout
-                    action = "WAIT"
-                self.perform_agent_action(a, action)
+                    a.available_think_time = a.base_timeout
+            else:
+                self.logger.info(
+                    f"Skipping agent <{a.name}> because of last slow think time."
+                )
+                a.available_think_time += a.base_timeout
+                action = Actions._member_map_["WAIT"]
+            self.perform_agent_action(a, action)
 
     def send_game_events(self):
         # Send events to all agents that expect them, then reset and wait for them
@@ -563,6 +565,37 @@ class BombeRLeWorld(GenericWorld):
                         pass
                         # a.wait_for_enemy_game_event_processing()
 
+    def time_to_stop(self):
+        # Check round stopping criteria
+        if any(a.env_user for a in self.killed_agents):
+            self.logger.info("Env user dead, wrap up round")
+            return True
+
+        if not len(self.active_agents):
+            self.logger.info("No agent left")
+            return True
+        
+        if (
+            len(self.active_agents) == 1
+            and (self.arena == 1).sum() == 0
+            and all([not c.collectable for c in self.coins])
+            and len(self.bombs) + len(self.explosions) == 0
+        ):
+            self.logger.info("One agent left with nothing to do")
+            return True
+        
+        if (
+            self.scenario_info["TYPE"] == "SINGLE_COIN"
+            and (self.arena == 1).sum() == 0
+            and all([not c.collectable for c in self.coins])):
+            return True
+
+        if self.step >= s.MAX_STEPS:
+            self.logger.info("Maximum number of steps reached, wrap up round")
+            return True
+
+        return False
+    
     def end_round(self):
         super().end_round()
 
@@ -588,20 +621,7 @@ class BombeRLeWorld(GenericWorld):
 class GUI:
     def __init__(self, world: GenericWorld):
         self.world = world
-        # self.screenshot_dir = Path(__file__).parent / "screenshots"
-
-        # Initialize screen
-        self.screen = pygame.display.set_mode((s.WIDTH, s.HEIGHT))
-        pygame.display.set_caption("BombeRLe")
-        icon = loadScaledAvatar(s.ASSET_DIR / "bomb_yellow.png")
-        pygame.display.set_icon(icon)
-
-        # Background and tiles
-        self.background = pygame.Surface((s.WIDTH, s.HEIGHT))
-        self.background = self.background.convert()
-        self.background.fill((0, 0, 0))
-        self.t_wall = loadScaledAvatar(s.ASSET_DIR / "brick.png")
-        self.t_crate = loadScaledAvatar(s.ASSET_DIR / "crate.png")
+        self.screen = None
 
         # Font for scores and such
         font_name = s.ASSET_DIR / "emulogic.ttf"
@@ -612,6 +632,11 @@ class GUI:
             "small": pygame.font.Font(font_name, 8 * s.SCALE),
         }
         self.frame = 0
+
+    def initScreen(self):
+        self.screen = pygame.Surface((s.WIDTH, s.HEIGHT))
+        self.t_wall = loadScaledAvatar(s.ASSET_DIR / "brick.png")
+        self.t_crate = loadScaledAvatar(s.ASSET_DIR / "crate.png")
 
     def render_text(
         self, text, x, y, color, halign="left", valign="top", size="medium", aa=False
@@ -633,17 +658,18 @@ class GUI:
         self.screen.blit(text_surface, text_rect)
 
     def render(self):
-        self.screen.blit(self.background, (0, 0))
+        if self.screen is None:
+            self.initScreen()
 
         if self.world.round == 0:
             return
 
+        self.screen.fill((0, 0, 0))
         self.frame += 1
-        pygame.display.set_caption(f"BombeRLe | Round #{self.world.round}")
 
         # World
-        for x in range(self.world.arena.shape[1]):
-            for y in range(self.world.arena.shape[0]):
+        for x in range(self.world.arena.shape[0]):
+            for y in range(self.world.arena.shape[1]):
                 if self.world.arena[x, y] == -1:
                     self.screen.blit(
                         self.t_wall,
@@ -700,8 +726,6 @@ class GUI:
                 s.GRID_OFFSET[0] + s.GRID_SIZE * explosion.x,
                 s.GRID_OFFSET[1] + s.GRID_SIZE * explosion.y,
             )
-        #for explosion in self.world.explosions:
-        #    explosion.render(self.screen)
 
         # Scores
         # agents = sorted(self.agents, key=lambda a: (a.score, -a.mean_time), reverse=True)
@@ -809,10 +833,4 @@ class GUI:
                     halign="center",
                     size="medium",
                 )
-
-        # TODO indeed not necessary?
-        # if self.world.running and self.world.args.make_video:
-        #    self.world.logger.debug(f'Saving screenshot for frame {self.frame}')
-        #    pygame.image.save(self.screen, str(self.screenshot_dir / f'{self.world.round_id}_{self.frame:05d}.png'))
-
         return self.screen

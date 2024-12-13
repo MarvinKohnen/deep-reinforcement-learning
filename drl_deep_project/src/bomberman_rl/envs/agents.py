@@ -17,7 +17,7 @@ from .items import loadScaledAvatar
 AGENT_API = {
     "callbacks": {
         "setup": ["self"],
-        "act": ["self", "game_state: dict"],
+        "act": ["self", "game_state: dict", "**kwargs"],
     },
     "train": {
         "setup_training": ["self"],
@@ -71,8 +71,7 @@ class Agent:
         display_name,
         train: bool,
         backend: "AgentBackend",
-        avatar_sprite_desc,
-        bomb_sprite_desc,
+        color: str,
         env_user: bool = False,
     ):
         self.backend = backend
@@ -82,7 +81,7 @@ class Agent:
         self.train = train
         self.env_user = env_user
         self.avatar, self.bomb_sprite, self.shade = self._prepare_avatar(
-            avatar_sprite_desc=avatar_sprite_desc, bomb_sprite_desc=bomb_sprite_desc
+            color=color
         )
         self.total_score = 0
         self.dead = None
@@ -99,21 +98,21 @@ class Agent:
         self.last_action = None
         self.setup()
 
-    def _prepare_avatar(self, avatar_sprite_desc, bomb_sprite_desc):
+    def _prepare_avatar(self, color):
         # Load custom avatar or standard robot avatar of assigned color
         try:
-            avatar = loadScaledAvatar(avatar_sprite_desc, expected_size=(30, 30))
+            avatar = loadScaledAvatar(s.ASSET_DIR / ".." / "envs" / "agent_code" / self.code_name / "avatar.png")
         except Exception:
-            avatar = loadScaledAvatar(s.ASSET_DIR / f"robot_{avatar_sprite_desc}.png")
+            avatar = loadScaledAvatar(s.ASSET_DIR / f"robot_{color}.png")
         # Load custom bomb sprite
         try:
-            bomb_sprite = loadScaledAvatar(bomb_sprite_desc, expected_size=(30, 30))
+            bomb = loadScaledAvatar(s.ASSET_DIR / ".." / "envs" / "agent_code" / self.code_name / "bomb.png")
         except Exception:
-            bomb_sprite = loadScaledAvatar(s.ASSET_DIR / f"bomb_{bomb_sprite_desc}.png")
+            bomb = loadScaledAvatar(s.ASSET_DIR / f"bomb_{color}.png")
         # Prepare overlay that will indicate dead agent on the scoreboard
         shade = pygame.Surface((30 * s.SCALE, 30 * s.SCALE), pygame.SRCALPHA)
         shade.fill((0, 0, 0, 208))
-        return (avatar, bomb_sprite, shade)
+        return (avatar, bomb, shade)
 
     def setup(self):
         # Call setup on backend
@@ -183,8 +182,8 @@ class Agent:
     def reset_game_events(self):
         self.events = []
 
-    def act(self, game_state):
-        self.backend.send_event("act", game_state)
+    def act(self, game_state, env_user_action=None):
+        self.backend.send_event("act", game_state, env_user_action=env_user_action)
 
     def wait_for_act(self):
         action, think_time = self.backend.get_with_time("act")
@@ -210,21 +209,46 @@ class AgentRunner:
     """
     Agent callback runner (called by backend).
     """
-
     def __init__(self, train, agent_name, code_name, result_queue, log_dir):
         self.agent_name = agent_name
         self.code_name = code_name
         self.result_queue = result_queue
-        print(os.getcwd())
-        self.callbacks = importlib.import_module(
-            ".envs.agent_code." + self.code_name + ".callbacks",
+        self.agent = importlib.import_module(
+            ".envs.agent_code." + self.code_name + ".agent",
             "bomberman_rl"
+        ).Agent()
+        # self.callbacks = importlib.import_module(
+        #     ".envs.agent_code." + self.code_name + ".callbacks",
+        #     "bomberman_rl"
+        # )
+        # if train:
+        #     self.train = importlib.import_module(
+        #         ".envs.agent_code." + self.code_name + ".train",
+        #         "bomberman_rl"
+        #     )
+        # self.check_interface(train=train)
+        # self.fake_self = SimpleNamespace()
+        # self.fake_self.train = train
+        self.wlogger = logging.getLogger(self.agent_name + "_wrapper")
+        self.wlogger.setLevel(s.LOG_AGENT_WRAPPER)
+        # self.fake_self.logger = logging.getLogger(self.agent_name + "_code")
+        # self.fake_self.logger.setLevel(s.LOG_AGENT_CODE)
+        log_dir = f"{log_dir}/{self.code_name}/"
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        handler = logging.FileHandler(f"{log_dir}{self.agent_name}.log", mode="w")
+        handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter(
+            "%(asctime)s [%(name)s] %(levelname)s: %(message)s"
         )
-        if train:
-            self.train = importlib.import_module(
-                ".envs.agent_code." + self.code_name + ".train",
-                "bomberman_rl"
-            )
+        handler.setFormatter(formatter)
+        self.wlogger.addHandler(handler)
+        # self.fake_self.logger.addHandler(handler)
+
+    def check_interface(self, train):
+        """
+        Check provided agent module's interface for compliance to this env engine
+        """
         for module_name in ["callbacks"] + (["train"] if train else []):
             module = getattr(self, module_name)
             for event_name, event_args in AGENT_API[module_name].items():
@@ -242,37 +266,19 @@ class AgentRunner:
                         f"Agent code {self.code_name}'s {event_name!r} has {actual_arg_count} arguments, but {event_arg_count} are required.\nChange your function's signature to the following:\n\n{proper_signature}"
                     )
 
-        self.fake_self = SimpleNamespace()
-        self.fake_self.train = train
-        self.wlogger = logging.getLogger(self.agent_name + "_wrapper")
-        self.wlogger.setLevel(s.LOG_AGENT_WRAPPER)
-        self.fake_self.logger = logging.getLogger(self.agent_name + "_code")
-        self.fake_self.logger.setLevel(s.LOG_AGENT_CODE)
-        log_dir = f"{log_dir}/{self.code_name}/"
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-        handler = logging.FileHandler(f"{log_dir}{self.agent_name}.log", mode="w")
-        handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter(
-            "%(asctime)s [%(name)s] %(levelname)s: %(message)s"
-        )
-        handler.setFormatter(formatter)
-        self.wlogger.addHandler(handler)
-        self.fake_self.logger.addHandler(handler)
-
-    def process_event(self, event_name, *event_args):
-        module_name = None
-        for module_candidate in AGENT_API:
-            if event_name in AGENT_API[module_candidate]:
-                module_name = module_candidate
-                break
-        if module_name is None:
-            raise ValueError(f"No information on event {event_name!r} is available")
-        module = getattr(self, module_name)
+    def process_event(self, event_name, *event_args, **event_kwargs):
+        # module_name = None
+        # for module_candidate in AGENT_API:
+        #     if event_name in AGENT_API[module_candidate]:
+        #         module_name = module_candidate
+        #         break
+        # if module_name is None:
+        #     raise ValueError(f"No information on event {event_name!r} is available")
+        # module = getattr(self, module_name)
         try:
             self.wlogger.debug(f"Calling {event_name} on callback.")
             start_time = time()
-            event_result = getattr(module, event_name)(self.fake_self, *event_args)
+            event_result = getattr(self.agent, event_name)(*event_args, **event_kwargs)
             duration = time() - start_time
             self.wlogger.debug(
                 f"Got result from callback#{event_name} in {duration:.3f}s."
@@ -298,7 +304,7 @@ class AgentBackend:
     def start(self):
         raise NotImplementedError()
 
-    def send_event(self, event_name, *event_args):
+    def send_event(self, event_name, *event_args, **event_kwargs):
         raise NotImplementedError()
 
     def get(self, expect_name: str, block=True, timeout=None):
@@ -334,14 +340,14 @@ class SequentialAgentBackend(AgentBackend):
             self.train, self.agent_name, self.code_name, self.result_queue, self.log_dir
         )
 
-    def send_event(self, event_name, *event_args):
+    def send_event(self, event_name, *event_args, **event_kwargs):
         prev_cwd = os.getcwd()
         os.chdir(
             os.path.dirname(__file__)
             + f'/agent_code/{self.code_name.replace(".", "/")}/'
         )
         try:
-            self.runner.process_event(event_name, *event_args)
+            self.runner.process_event(event_name, *event_args, **event_kwargs)
         finally:
             os.chdir(prev_cwd)
 
@@ -387,5 +393,5 @@ class ProcessAgentBackend(AgentBackend):
     def start(self):
         self.process.start()
 
-    def send_event(self, event_name, *event_args):
-        self.wta_queue.put((event_name, event_args))
+    def send_event(self, event_name, *event_args, **event_kwargs):
+        self.wta_queue.put((event_name, event_args, event_kwargs))
