@@ -1,18 +1,21 @@
-class RuleBaseAgent:
+from logging import Logger
+
+class RuleBasedAgent:
     """
     Stick to this interface to enable later competition.
     (Demonstration only - do not inherit)
     """
     def __init__(self):
+        self.logger = Logger("Agent")
         self.setup()
 
     def setup(self):
         """
-        Before episode. Use this to setup action related state that is required to act on the environment.
+        Before episode (optional). Use this to setup action related state that is required to act on the environment.
         """
         pass
 
-    def act(self, state: dict) -> int:
+    def act(self, state, **kwargs) -> int:
         """
         Before step. Return action based on state.
 
@@ -21,9 +24,11 @@ class RuleBaseAgent:
         raise NotImplementedError()
 
 
-class RLAgent(RuleBaseAgent):
+class LearningAgent(RuleBasedAgent):
     """
-    An agent that wants to learn can profit from further Callbacks.
+    A learning agent (located within the environment package) profits from further callbacks.
+    If you manually operate on the environment, like from ``/scripts``, it is not strictly necessary to follow this interface.
+    However, the example training loop in main.py supports this interface by calling the respective callbacks.
     (Demonstration only - do not inherit)
     """
     def __init__(self):
@@ -38,10 +43,10 @@ class RLAgent(RuleBaseAgent):
 
     def game_events_occurred(
         self,
-        old_state: dict,
-        self_action: str,
-        new_state: dict,
-        events: list[str],
+        old_state,
+        self_action,
+        new_state,
+        events,
     ):
         """
         After step in environment (optional). Use this e.g. for model training.
