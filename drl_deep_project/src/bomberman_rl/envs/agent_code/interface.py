@@ -369,3 +369,14 @@ class LearningAgent(RuleBasedAgent):
         After episode ended (optional). Use this e.g. for model training and saving.
         """
         pass
+
+
+    # Think about the state space and initial rewards
+    # think about simple approach first, like walking in straight line or getting near coins
+    # Basic principle: Simplify approach, until you get intended behaviour
+    # learning curves: return over time for RL and error over time for NN
+
+    # basic coin getting example: -5 for killing yourself, +1 for coin, negative reward for each timestep
+    # simple 3x8 with only one coin, 100k batch steps with bathc size 100
+
+    # coordinates will be changed to cartesian, gonna kill myself
