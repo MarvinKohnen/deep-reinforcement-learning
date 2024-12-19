@@ -126,9 +126,9 @@ class Agent(RuleBasedAgent):
             valid_actions.append("LEFT")
         if (x + 1, y) in valid_tiles:
             valid_actions.append("RIGHT")
-        if (x, y - 1) in valid_tiles:
-            valid_actions.append("UP")
         if (x, y + 1) in valid_tiles:
+            valid_actions.append("UP")
+        if (x, y - 1) in valid_tiles:
             valid_actions.append("DOWN")
         if (x, y) in valid_tiles:
             valid_actions.append("WAIT")
@@ -172,9 +172,9 @@ class Agent(RuleBasedAgent):
             for o in others:
                 free_space[o] = False
         d = self.look_for_targets(free_space, (x, y), targets, self.logger)
-        if d == (x, y - 1):
-            action_ideas.append("UP")
         if d == (x, y + 1):
+            action_ideas.append("UP")
+        if d == (x, y - 1):
             action_ideas.append("DOWN")
         if d == (x - 1, y):
             action_ideas.append("LEFT")
@@ -203,9 +203,9 @@ class Agent(RuleBasedAgent):
             if (xb == x) and (abs(yb - y) < 4):
                 # Run away
                 if yb > y:
-                    action_ideas.append("UP")
-                if yb < y:
                     action_ideas.append("DOWN")
+                if yb < y:
+                    action_ideas.append("UP")
                 # If possible, turn a corner
                 action_ideas.append("LEFT")
                 action_ideas.append("RIGHT")

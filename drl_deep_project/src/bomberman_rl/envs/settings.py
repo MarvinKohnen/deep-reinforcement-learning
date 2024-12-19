@@ -4,8 +4,8 @@ import pygame
 
 # Game properties
 # board size (a smaller board may be useful at the beginning)
-COLS = 10
-ROWS = 3
+COLS = 17
+ROWS = 17
 
 SCENARIOS = {
     # official tournament scenario
@@ -16,6 +16,8 @@ SCENARIOS = {
     "loot-crate": {"TYPE": "BASIC", "CRATE_DENSITY": 0.75, "COIN_COUNT": 50},
     "single-coin-fixed": {"TYPE": "SINGLE_COIN", "FIXED": True},
     "single-coin-rand": {"TYPE": "SINGLE_COIN", "FIXED": False},
+    "curriculum-coin": {"TYPE": "CURRICULUM", "CRATE": False},
+    "curriculum-crate": {"TYPE": "CURRICULUM", "CRATE": True},
     # you might build on the available TYPES
     # you might implement your own custom TYPES in: environment.py -> BombeRLeWorld -> build_arena()
 }

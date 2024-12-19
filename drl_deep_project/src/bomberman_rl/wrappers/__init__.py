@@ -1,4 +1,4 @@
 from .observation import RestrictedKeysWrapper, FlattenWrapper
-from .reward import ScoreRewardWrapper
+from .reward import ScoreRewardWrapper, TimePenaltyRewardWrapper
 
-__all__ = ["RestrictedKeysWrapper", "FlattenWrapper", "ScoreRewardWrapper"]
+__all__ = ["RestrictedKeysWrapper", "FlattenWrapper", "ScoreRewardWrapper", "TimePenaltyRewardWrapper"]
