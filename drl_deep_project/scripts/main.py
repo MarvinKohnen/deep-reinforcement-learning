@@ -81,15 +81,9 @@ def main(argv=None):
     if args.video:
         env = RecordVideo(env, video_folder=args.video, name_prefix=args.match_name)
 
-<<<<<<< HEAD
     # Agent setup
     agent = RuleBasedAgent()
     agent.setup()
-=======
-    agent = provideAgent(passive=args.passive)
-    if agent is None and not args.passive and not args.user_play:
-        raise AssertionError("Either provide an agent or run in passive mode by providing the command line argument --passive")
->>>>>>> c84f886a0d1a75c700955107a27153a636781b29
     if args.train:
         agent.setup_training()
 
