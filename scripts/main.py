@@ -2,17 +2,26 @@ import time
 import gymnasium
 from gymnasium.wrappers import RecordVideo
 
-from bomberman_rl import ScoreRewardWrapper, RestrictedKeysWrapper, FlattenWrapper
+from bomberman_rl import ScoreRewardWrapper, RestrictedKeysWrapper, FlattenWrapper, TimePenaltyRewardWrapper
 
 from argparsing import parse
-from learning_agent.agent import Agent
+from rule_based_agent.agent import Agent
 
 class DummyAgent:
     def setup(self):
         pass
 
+    def setup_training(self, *args, **kwargs):
+        pass
+
     def act(self, *args, **kwargs):
         return None
+    
+    def game_events_occurred(self, *args, **kwargs):
+        pass
+
+    def end_of_round(self, *args, **kwargs):
+        pass
 
 def loop(env, agent, args, n_episodes=100):
     for i in range(n_episodes):
@@ -52,7 +61,8 @@ def provideAgent(passive: bool):
     if passive:
         return DummyAgent()
     else:
-        agent = Agent()
+        # agent = Agent()
+        agent = DummyAgent()
         return agent
 
 def main(argv=None):
@@ -62,13 +72,14 @@ def main(argv=None):
     # Notice that you can not use wrappers in the tournament!
     # However, you might wanna use this example interface to kickstart your experiments
     env = ScoreRewardWrapper(env)
-    env = RestrictedKeysWrapper(env, keys=["self_pos"])
-    env = FlattenWrapper(env)
+    env = TimePenaltyRewardWrapper(env, penalty=.1)
+    #env = RestrictedKeysWrapper(env, keys=["self_pos"])
+    #env = FlattenWrapper(env)
     if args.video:
         env = RecordVideo(env, video_folder=args.video, name_prefix=args.match_name)
 
     agent = provideAgent(passive=args.passive)
-    if agent is None and not args.passive:
+    if agent is None and not args.passive and not args.user_play:
         raise AssertionError("Either provide an agent or run in passive mode by providing the command line argument --passive")
     if args.train:
         agent.setup_training()

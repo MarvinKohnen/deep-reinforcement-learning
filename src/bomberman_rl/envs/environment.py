@@ -2,6 +2,7 @@ import json
 import logging
 import pickle
 import subprocess
+from random import sample
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
@@ -125,11 +126,11 @@ class GenericWorld:
             action = Actions(action)._name_
         except ValueError:
             agent.add_event(e.INVALID_ACTION)
-        if action == "UP" and self.tile_is_free(agent.x, agent.y - 1):
-            agent.y -= 1
-            agent.add_event(e.MOVED_UP)
-        elif action == "DOWN" and self.tile_is_free(agent.x, agent.y + 1):
+        if action == "UP" and self.tile_is_free(agent.x, agent.y + 1):
             agent.y += 1
+            agent.add_event(e.MOVED_UP)
+        elif action == "DOWN" and self.tile_is_free(agent.x, agent.y - 1):
+            agent.y -= 1
             agent.add_event(e.MOVED_DOWN)
         elif action == "LEFT" and self.tile_is_free(agent.x - 1, agent.y):
             agent.x -= 1
@@ -423,8 +424,66 @@ class BombeRLeWorld(GenericWorld):
         match self.scenario_info["TYPE"]:
             case "SINGLE_COIN":
                 return self.build_single_coin_arena()
+            case "CURRICULUM":
+                return self.build_curriculum_arena()
             case _:
-                raise NotImplementedError(f"Scenario of type {self.scenario_info["TYPE"]} not implemented.")
+                raise NotImplementedError(f"Scenario of type {self.scenario_info['TYPE']} not implemented.")
+            
+    def build_curriculum_arena(self):
+        crate = self.scenario_info["CRATE"]
+
+        WALL = -1
+        arena = np.zeros((s.COLS, s.ROWS), int)
+
+        # Walls
+        arena[:1, :] = WALL
+        arena[-1:, :] = WALL
+        arena[:, :1] = WALL
+        arena[:, -1:] = WALL
+
+        # Start positions
+        start_positions = [
+            (1, 1),
+            (s.COLS - 2, s.ROWS - 2)
+        ]
+        if s.COLS > 3 and s.ROWS > 3:
+            start_positions.extend([
+            (s.COLS - 2, 1),
+            (1, s.ROWS - 2),
+        ])
+        assert(len(self.agents)) < len(start_positions), f"This scenario supports only {len(start_positions) - 1} agents for altogether {len(start_positions)} available start positions"
+        start_positions = list(self.rng.permutation(start_positions))
+
+        active_agents = []
+        for agent, start_position in zip(
+            sorted(self.agents, key=lambda a: a.env_user, reverse=True), start_positions
+        ):
+            active_agents.append(agent)
+            agent.x, agent.y = start_position
+
+        env_user = [a for a in self.agents if a.env_user][0]
+        x_transpose = env_user.x != 1
+        y_transpose = env_user.y != 1
+        n_corners = 5
+        assert(n_corners < s.ROWS - 2 and n_corners < s.COLS - 2)
+        coin_positions = []
+        coin_helper_x, coin_helper_y = sorted(sample(range(s.COLS - 2), n_corners)), sorted(sample(range(s.ROWS - 2), n_corners))
+        for xi, x in enumerate(coin_helper_x):
+            y_min = 0 if xi == 0 else coin_helper_y[xi]
+            y_max = s.ROWS - 2 if xi == len(coin_helper_x) - 1 else coin_helper_y[xi + 1]
+            for y in range(y_min, y_max):
+                coin_positions.append((s.COLS - 1 - (x + 1) if x_transpose else (x + 1), s.ROWS - 1 - (y + 1) if y_transpose else (y + 1)))
+            z_max = s.COLS - 2 if xi == len(coin_helper_x) - 1 else coin_helper_x[xi + 1]
+            for z in range(x, z_max):
+                coin_positions.append((s.COLS - 1 - (z + 1) if x_transpose else (z + 1), s.ROWS - 1 - y_max if y_transpose else y_max))
+
+        coin_positions = list(set(coin_positions))
+        coin_positions = [p for p in coin_positions if not p == (env_user.x, env_user.y)]
+        coins = [Coin(c, collectable=not crate) for c in coin_positions]
+        if crate:
+            arena[*zip(*coin_positions)] = 1
+
+        return arena, coins, active_agents
             
     def build_single_coin_arena(self):
         fixed = self.scenario_info["FIXED"]
@@ -439,18 +498,21 @@ class BombeRLeWorld(GenericWorld):
         arena[:, -1:] = WALL
 
         # Start positions
-        start_positions = list(set([
+        start_positions = [
             (1, 1),
+            (s.COLS - 2, s.ROWS - 2)
+        ]
+        if s.COLS > 3 and s.ROWS > 3:
+            start_positions.extend([
             (s.COLS - 2, 1),
             (1, s.ROWS - 2),
-            (s.COLS - 2, s.ROWS - 2),
-        ]))
+        ])
         assert(len(self.agents)) < len(start_positions), f"This scenario supports only {len(start_positions) - 1} agents for altogether {len(start_positions)} available start positions"
 
         if not fixed:
             start_positions = list(self.rng.permutation(start_positions))
 
-        coins = [Coin(start_positions.pop(), collectable=True)]
+        coins = [Coin(start_positions.pop(0), collectable=True)]
         active_agents = []
         for agent, start_position in zip(
             sorted(self.agents, key=lambda a: a.env_user, reverse=True), start_positions
@@ -675,7 +737,7 @@ class GUI:
                         self.t_wall,
                         (
                             s.GRID_OFFSET[0] + s.GRID_SIZE * x,
-                            s.GRID_OFFSET[1] + s.GRID_SIZE * y,
+                            s.GRID_OFFSET[1] + s.GRID_SIZE * (s.ROWS - y - 1),
                         ),
                     )
                 if self.world.arena[x, y] == 1:
@@ -683,7 +745,7 @@ class GUI:
                         self.t_crate,
                         (
                             s.GRID_OFFSET[0] + s.GRID_SIZE * x,
-                            s.GRID_OFFSET[1] + s.GRID_SIZE * y,
+                            s.GRID_OFFSET[1] + s.GRID_SIZE * (s.ROWS - y - 1),
                         ),
                     )
         self.render_text(
@@ -701,14 +763,14 @@ class GUI:
             bomb.render(
                 self.screen,
                 s.GRID_OFFSET[0] + s.GRID_SIZE * bomb.x,
-                s.GRID_OFFSET[1] + s.GRID_SIZE * bomb.y,
+                s.GRID_OFFSET[1] + s.GRID_SIZE * (s.ROWS - bomb.y - 1),
             )
         for coin in self.world.coins:
             if coin.collectable:
                 coin.render(
                     self.screen,
                     s.GRID_OFFSET[0] + s.GRID_SIZE * coin.x,
-                    s.GRID_OFFSET[1] + s.GRID_SIZE * coin.y,
+                    s.GRID_OFFSET[1] + s.GRID_SIZE * (s.ROWS - coin.y - 1),
                 )
 
         # Agents
@@ -716,7 +778,7 @@ class GUI:
             agent.render(
                 self.screen,
                 s.GRID_OFFSET[0] + s.GRID_SIZE * agent.x,
-                s.GRID_OFFSET[1] + s.GRID_SIZE * agent.y,
+                s.GRID_OFFSET[1] + s.GRID_SIZE * (s.ROWS - agent.y - 1),
             )
 
         # Explosions
@@ -724,7 +786,7 @@ class GUI:
             explosion.render(
                 self.screen,
                 s.GRID_OFFSET[0] + s.GRID_SIZE * explosion.x,
-                s.GRID_OFFSET[1] + s.GRID_SIZE * explosion.y,
+                s.GRID_OFFSET[1] + s.GRID_SIZE * (s.ROWS - explosion.y - 1),
             )
 
         # Scores

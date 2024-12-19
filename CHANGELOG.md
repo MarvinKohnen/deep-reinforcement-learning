@@ -1,4 +1,23 @@
-## [v2.0.0] Dec 6th
+
+## [v2.2.0]
+### Changed
+- add curriculum scenarios 
+   ```bash
+   python scripts/main.py --players --train --scenario curriculum-coin
+   python scripts/main.py --players --train --scenario curriculum-crate
+   ```
+
+## [v2.1.0]
+### Changed
+- change coordinate center from Top-Left to Bottom-Left: this switches the effect of the ```UP``` and ```DOWN``` actions
+
+## [v2.0.1]
+### Fixed
+- clean entry point (main loop)
+- start position of ```single-coin``` scenarios
+- custom arena error handling
+
+# [v2.0.0] December 6, 2024
 ### Added
 - run a tournament
 - single coin scenario, see ```settings.py```
@@ -17,3 +36,6 @@
 ## [v1.0.1]
 ### Fixed
 - ```Coins``` observation was missing in ```README.md``` (credit to student for pointing out)
+
+
+# [v1.0.0] November 22, 2024
