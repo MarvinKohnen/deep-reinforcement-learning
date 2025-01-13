@@ -8,6 +8,7 @@ from .q_learning import Model
 SCORE_INCREASED = "SCORE_INCREASED"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 class Agent(LearningAgent):
     """
     Sticking to the ``LearningAgent`` interface is optional.
@@ -48,27 +49,28 @@ class Agent(LearningAgent):
         events,
     ):
         """
-        After step in environment (optional). Use this e.g. for model training.
-
-        :param old_state: Old state of the environment.
-        :param self_action: Performed action.
-        :param new_state: New state of the environment.
-        :param events: Events that occurred during step. These might be used for Reward Shaping.
+        After step in environment. Use this for model training.
         """
+        
         # Process both states using get_scope_representation
         old_state_processed = self.get_scope_representation(old_state)
         new_state_processed = None if new_state is None else self.get_scope_representation(new_state)
         
+        # Add custom events to the events list
+        custom_events = self._custom_events(old_state, new_state)
+        events.extend(custom_events)
+        
+        # Calculate reward with both standard and custom events
         reward = self._shape_reward(events)
+        
         self.q_learning.experience(
             old_state=old_state_processed,
             action=self_action,
             new_state=new_state_processed,
             reward=reward
         )
-        self.q_learning.optimize_incremental()
-
-
+        return self.q_learning.optimize_incremental()
+         
     def end_of_round(self):
         """
         After episode ended (optional). Use this e.g. for model training and saving.
@@ -90,29 +92,36 @@ class Agent(LearningAgent):
         Shape rewards here instead of in an Environment Wrapper in order to be more flexible (e.g. use this agent as proper component of the environment where no environment wrappers are possible)
         """
         reward_mapping = {
-            SCORE_INCREASED: 1, # does not trigger due to current observation wrapper in main.py
             e.COIN_COLLECTED: 1,
             e.GOT_KILLED: -1,
-            e.KILLED_SELF: -1
+            e.KILLED_SELF: -1,
+            e.KILLED_OPPONENT: 5,
+            e.INVALID_ACTION: -0.1,
         }
         return sum([reward_mapping.get(event, 0) for event in events])
 
     def get_scope_representation(self, state):
+        # Get state information
         self_pos = np.argwhere(state["self_pos"] == 1)[0]
         walls = state["walls"]
         crates = state["crates"]
         coins = state["coins"]
         opponents = state["opponents_pos"]
 
+        # Define representation values
+        wall_value = -1
+        crate_value = 2
+        coin_value = 10
+        self_value = 5
+        reachable_value = 1
+        opponent_value = -10
         # Initialize reachable positions (position is marked as a 2) and danger map into one array
         danger_map = self.get_danger_map(state)
-        # print("Danger map:\n", self.format_array(danger_map))
         scope_representation = danger_map
         if not scope_representation[self_pos[0], self_pos[1]] < 0:
-            scope_representation[self_pos[0], self_pos[1]] = 2
-        # Traverse the board and mark reachable positions using BFS
-        # Mark 1 for reachable positions, 0 for unreachable positions, -10 for walls, -9 for crates, -1 for bombs and ??? explosions
+            scope_representation[self_pos[0], self_pos[1]] = self_value
 
+        # Traverse the board and mark reachable positions using BFS
         queue = [self_pos]
         while queue:
             pos = queue.pop(0)
@@ -121,23 +130,40 @@ class Agent(LearningAgent):
                 new_pos = (pos[0] + d[0], pos[1] + d[1])
                 # Mark crates
                 if crates[new_pos[0], new_pos[1]] == 1:
-                    scope_representation[new_pos[0], new_pos[1]] = -9
+                    scope_representation[new_pos[0], new_pos[1]] = crate_value
                 if (
                     coins[new_pos[0], new_pos[1]] == 1
                     and scope_representation[new_pos[0], new_pos[1]] >= 0
                 ):
-                    scope_representation[new_pos[0], new_pos[1]] = 10
+                    scope_representation[new_pos[0], new_pos[1]] = coin_value
                 if (
                     opponents[new_pos[0], new_pos[1]] == 1
                     and scope_representation[new_pos[0], new_pos[1]] >= 0
                 ):
-                    scope_representation[new_pos[0], new_pos[1]] = -50
+                    scope_representation[new_pos[0], new_pos[1]] = opponent_value
 
                 # Mark reachable positions
                 if scope_representation[new_pos[0], new_pos[1]] == 0:
-                    scope_representation[new_pos[0], new_pos[1]] = 1
+                    scope_representation[new_pos[0], new_pos[1]] = reachable_value
                     queue.append(new_pos)
-        return torch.tensor(scope_representation, device=device, dtype=torch.float32).flatten()
+
+
+        # Create fixed window around agent 
+        window_size = 3  # This gives 7x7 (3 cells in each direction)
+        padded_scope = np.pad(
+            scope_representation,
+            window_size,
+            mode='constant',
+            constant_values=wall_value   # Use wall value to indicate out-of-bounds as padding
+        )
+
+        # For window_size = 3 and agent at position (x,y) in scope_representation:
+        agent_x, agent_y = self_pos[0] + window_size, self_pos[1] + window_size  # (x+3,y+3) because we added padding
+        window = padded_scope[
+            agent_x - window_size : agent_x + window_size + 1, # (x+3)-3 : (x+3)+3+1 -> [x:x+7]
+            agent_y - window_size : agent_y + window_size + 1  # (y+3)-3 : (y+3)+3+1 -> [y:y+7]
+        ]
+        return torch.tensor(window, device=device, dtype=torch.float32).flatten()
 
     def get_danger_map(self, state):
         bombs = -1 * state["bombs"]
