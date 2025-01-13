@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from bomberman_rl import LearningAgent, events as e
+import time
 
 from .q_learning import Model
 
@@ -39,6 +40,8 @@ class Agent(LearningAgent):
         """
         Before episode (optional). Use this to setup additional learning related state e.g. a replay memory, hyper parameters etc.
         """
+        # Create a timestamp for this training run
+        self.training_timestamp = time.strftime("%Y%m%d_%H%M%S")
         pass
 
     def game_events_occurred(
@@ -76,7 +79,8 @@ class Agent(LearningAgent):
         After episode ended (optional). Use this e.g. for model training and saving.
         """
         self.q_learning.optimize_incremental()
-        self.q_learning.save_weights() # save model in case this was last round
+        # Save model with timestamp
+        self.q_learning.save_weights(suffix=self.training_timestamp)
 
     def _custom_events(self, old_state, new_state):
         """

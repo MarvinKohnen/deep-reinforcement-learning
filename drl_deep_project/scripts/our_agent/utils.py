@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 class TrainingLogger:
-    def __init__(self, window_size=100, log_interval=10, save_dir='training_logs'):
+    def __init__(self, window_size=100, save_dir='training_logs'):
         # Create save directory
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(exist_ok=True)
@@ -37,7 +37,6 @@ class TrainingLogger:
         self.recent_rewards = deque(maxlen=window_size)
         self.recent_losses = deque(maxlen=window_size)
         self.start_time = time.time()
-        self.log_interval = log_interval
         
         # Setup logging
         logging.basicConfig(
@@ -64,7 +63,7 @@ class TrainingLogger:
             self.recent_losses.append(loss)
 
         # Log to file at intervals
-        if episode > 0 and episode % self.log_interval == 0:
+        if episode > 0 and episode % 10 == 0:
             avg_reward = np.mean(self.recent_rewards)
             avg_loss = np.mean(self.recent_losses) if self.recent_losses else 0
             elapsed_time = time.time() - self.start_time
@@ -77,8 +76,8 @@ class TrainingLogger:
                 f"Time: {elapsed_time:.0f}s"
             )
         
-            self.save_stats()
-            self.plot_training(save_only=True)
+        self.save_stats()
+        self.plot_training(save_only=True)
 
     def save_stats(self):
         """Save training statistics to file"""

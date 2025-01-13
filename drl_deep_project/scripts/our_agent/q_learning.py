@@ -191,11 +191,48 @@ class Model():
             None if new_state is None else new_state,
             torch.tensor([reward], device=device, dtype=torch.float32))
 
-    def save_weights(self):
-        torch.save(self.policy_net.state_dict(), self.path)
+    def save_weights(self, suffix=None):
+        """Save model weights with optional timestamp suffix"""
+        save_dir = Path("scripts/our_agent/models")
+        save_dir.mkdir(exist_ok=True)
+        
+        if suffix:
+            filename = f"dqn_{suffix}.pt"
+        else:
+            filename = "dqn.pt"
+        
+        torch.save(self.policy_net.state_dict(), save_dir / filename)
 
-    def load_weights(self):
-        self.policy_net.load_state_dict(torch.load(self.path, weights_only=True, map_location=torch.device('cpu')))
+    def load_weights(self, suffix=None):
+        """
+        Load model weights. If suffix is provided, load that specific version.
+        Otherwise, try to load the most recent version.
+        """
+        save_dir = Path("scripts/our_agent/models")
+        
+        if suffix:
+            # Load specific version
+            filename = f"dqn_{suffix}.pt"
+        else:
+            # Try to load the most recent version
+            model_files = list(save_dir.glob("dqn_*.pt"))
+            if not model_files:
+                print("No saved model found. Starting with fresh weights.")
+                return
+            
+            # Sort by timestamp (newest first)
+            latest_model = max(model_files, key=lambda x: x.stat().st_mtime)
+            filename = latest_model.name
+            print(f"Loading model: {filename}")
+        
+        try:
+            model_path = save_dir / filename
+            self.policy_net.load_state_dict(torch.load(model_path, weights_only=True))
+            print(f"Successfully loaded weights from {filename}")
+        except FileNotFoundError:
+            print(f"No saved model found at {model_path}")
+        except Exception as e:
+            print(f"Error loading model: {e}")
 
     def get_epsilon(self):
         return self.eps_end + (self.eps_start - self.eps_end) * \

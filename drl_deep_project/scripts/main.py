@@ -26,11 +26,10 @@ class DummyAgent:
     def end_of_round(self, *args, **kwargs):
         pass
 
-def loop(env, agent, args, n_episodes=100):
+def loop(env, agent, args, n_episodes=10):
     # Create logger with path relative to our_agent directory
     logger = TrainingLogger(
         save_dir='scripts/our_agent/training_logs',
-        log_interval=10
     ) if args.train else None
     
     if args.train:
@@ -101,7 +100,7 @@ def loop(env, agent, args, n_episodes=100):
     print("Training complete")
     print(f"Training ended at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"That took {time.time() - start_time:.2f} seconds")
-    
+
 def provideAgent(passive: bool):
     if passive:
         return DummyAgent()
