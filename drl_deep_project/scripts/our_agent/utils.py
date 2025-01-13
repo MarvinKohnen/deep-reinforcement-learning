@@ -8,31 +8,74 @@ import json
 from pathlib import Path
 
 class TrainingLogger:
-    def __init__(self, window_size=100, save_dir='training_logs'):
+    def __init__(self, window_size=100, save_dir='training_logs', fresh=False):
         # Create save directory
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(exist_ok=True)
         
-        # Try to load existing stats
-        stats_file = self.save_dir / 'training_stats.json'
-        if stats_file.exists():
-            with open(stats_file, 'r') as f:
-                saved_stats = json.load(f)
-                self.rewards = saved_stats.get('rewards', [])
-                self.losses = saved_stats.get('losses', [])
-                self.eps_values = saved_stats.get('eps_values', [])
-                self.steps = [int(x) for x in saved_stats.get('steps', [])]
-                self.episode_lengths = saved_stats.get('episode_lengths', [])
+        # If fresh training, archive existing stats
+        if fresh:
+            # Find most recent model file to get its timestamp
+            model_dir = Path('scripts/our_agent/models')
+            model_files = list(model_dir.glob("dqn_*.pt"))
+            
+            # Only proceed with archiving if there are model files and training data
+            if model_files and any([
+                (self.save_dir / 'training_stats.json').exists(),
+                (self.save_dir / 'training_progress.png').exists(),
+                (self.save_dir / 'training.log').exists()
+            ]):
+                # Extract timestamp from the most recent model file
+                latest_model = max(model_files, key=lambda x: x.stat().st_mtime)
+                timestamp = latest_model.name.replace('dqn_', '').replace('.pt', '')
+                print(f"\nArchiving previous training run with timestamp {timestamp}")
                 
-                # If there are existing steps, next episode should continue from last one
-                self.episode_offset = int(self.steps[-1] + 1) if self.steps else 0
-        else:
+                # Create archive directory with model timestamp
+                archive_dir = self.save_dir / f"archive_{timestamp}"
+                archive_dir.mkdir(exist_ok=True)
+                
+                # Move existing files to archive
+                if (self.save_dir / 'training_stats.json').exists():
+                    (self.save_dir / 'training_stats.json').rename(archive_dir / 'training_stats.json')
+                if (self.save_dir / 'training_progress.png').exists():
+                    (self.save_dir / 'training_progress.png').rename(archive_dir / 'training_progress.png')
+                if (self.save_dir / 'training.log').exists():
+                    (self.save_dir / 'training.log').rename(archive_dir / 'training.log')
+                    
+                print(f"Previous training logs archived to: {archive_dir}")
+            else:
+                print("\nNo previous training data found")
+                
+            print("Starting fresh training run with new network!\n")
+            
+            # Start with fresh stats
             self.rewards = []
             self.losses = []
             self.eps_values = []
             self.steps = []
             self.episode_lengths = []
             self.episode_offset = 0
+        else:
+            # Try to load existing stats
+            stats_file = self.save_dir / 'training_stats.json'
+            if stats_file.exists():
+                with open(stats_file, 'r') as f:
+                    saved_stats = json.load(f)
+                    self.rewards = saved_stats.get('rewards', [])
+                    self.losses = saved_stats.get('losses', [])
+                    self.eps_values = saved_stats.get('eps_values', [])
+                    self.steps = [int(x) for x in saved_stats.get('steps', [])]
+                    self.episode_lengths = saved_stats.get('episode_lengths', [])
+                    
+                    # If there are existing steps, next episode should continue from last one
+                    self.episode_offset = int(self.steps[-1] + 1) if self.steps else 0
+            else:
+                self.rewards = []
+                self.losses = []
+                self.eps_values = []
+                self.steps = []
+                self.episode_lengths = []
+                self.episode_offset = 0
         
         self.recent_rewards = deque(maxlen=window_size)
         self.recent_losses = deque(maxlen=window_size)

@@ -9,6 +9,7 @@ from argparsing import parse
 # from learning_agent.agent import Agent
 from our_agent.agent import Agent
 from our_agent.utils import TrainingLogger
+from our_agent.q_learning import Model
 
 class DummyAgent:
     def setup(self):
@@ -26,10 +27,11 @@ class DummyAgent:
     def end_of_round(self, *args, **kwargs):
         pass
 
-def loop(env, agent, args, n_episodes=10000):
+def loop(env, agent, args, n_episodes=100):
     # Create logger with path relative to our_agent directory
     logger = TrainingLogger(
         save_dir='scripts/our_agent/training_logs',
+        fresh=(args.weights == "fresh")
     ) if args.train else None
     
     if args.train:
@@ -101,13 +103,15 @@ def loop(env, agent, args, n_episodes=10000):
     print(f"Training ended at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"That took {time.time() - start_time:.2f} seconds")
 
-def provideAgent(passive: bool):
+def provideAgent(passive: bool, weights: str = None):
     if passive:
         return DummyAgent()
     else:
-        # agent = RuleBasedAgent()
-        # agent = DummyAgent()
         agent = Agent()
+        if weights == "fresh":
+            agent.q_learning = Model(load=False)  # Don't load existing weights
+        elif weights:  # if weights is a timestamp
+            agent.q_learning.load_weights(suffix=weights)
         return agent
 
 def main(argv=None):
@@ -117,13 +121,13 @@ def main(argv=None):
     # Notice that you can not use wrappers in the tournament!
     # However, you might wanna use this example interface to kickstart your experiments
     # env = ScoreRewardWrapper(env)
-    # env = TimePenaltyRewardWrapper(env, penalty=.1)
+    env = TimePenaltyRewardWrapper(env, penalty=.1)
     #env = RestrictedKeysWrapper(env, keys=["self_pos"])
     #env = FlattenWrapper(env)
     if args.video:
         env = RecordVideo(env, video_folder=args.video, name_prefix=args.match_name)
 
-    agent = provideAgent(passive=args.passive)
+    agent = provideAgent(passive=args.passive, weights=args.weights)
     if agent is None and not args.passive and not args.user_play:
         raise AssertionError("Either provide an agent or run in passive mode by providing the command line argument --passive")
     if args.train:
