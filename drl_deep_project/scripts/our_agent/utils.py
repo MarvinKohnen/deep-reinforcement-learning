@@ -9,21 +9,37 @@ from pathlib import Path
 
 class TrainingLogger:
     def __init__(self, window_size=100, log_interval=10, save_dir='training_logs'):
-        self.rewards = []
-        self.losses = []
-        self.eps_values = []
-        self.steps = []
-        self.episode_lengths = []
+        # Create save directory
+        self.save_dir = Path(save_dir)
+        self.save_dir.mkdir(exist_ok=True)
+        
+        # Try to load existing stats
+        stats_file = self.save_dir / 'training_stats.json'
+        if stats_file.exists():
+            with open(stats_file, 'r') as f:
+                saved_stats = json.load(f)
+                self.rewards = saved_stats.get('rewards', [])
+                self.losses = saved_stats.get('losses', [])
+                self.eps_values = saved_stats.get('eps_values', [])
+                self.steps = [int(x) for x in saved_stats.get('steps', [])]
+                self.episode_lengths = saved_stats.get('episode_lengths', [])
+                
+                # If there are existing steps, next episode should continue from last one
+                self.episode_offset = int(self.steps[-1] + 1) if self.steps else 0
+        else:
+            self.rewards = []
+            self.losses = []
+            self.eps_values = []
+            self.steps = []
+            self.episode_lengths = []
+            self.episode_offset = 0
+        
         self.recent_rewards = deque(maxlen=window_size)
         self.recent_losses = deque(maxlen=window_size)
         self.start_time = time.time()
         self.log_interval = log_interval
         
-        # Create save directory
-        self.save_dir = Path(save_dir)
-        self.save_dir.mkdir(exist_ok=True)
-        
-        # Setup logging with file only (no console output)
+        # Setup logging
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s [%(levelname)s] - %(message)s',
@@ -34,11 +50,14 @@ class TrainingLogger:
         self.logger = logging.getLogger(__name__)
 
     def log_episode(self, episode, epsilon, loss, reward, episode_length):
+        # Adjust episode number to continue from previous training
+        actual_episode = episode + self.episode_offset
+        
         # Store data
         self.rewards.append(reward)
         self.losses.append(loss if loss else 0)
         self.eps_values.append(epsilon)
-        self.steps.append(episode)
+        self.steps.append(actual_episode)
         self.episode_lengths.append(episode_length)
         self.recent_rewards.append(reward)
         if loss:
@@ -51,7 +70,7 @@ class TrainingLogger:
             elapsed_time = time.time() - self.start_time
             
             self.logger.info(
-                f"Episode {episode:4d} | "
+                f"Episode {actual_episode:4d} | "
                 f"Epsilon: {epsilon:.2f} | "
                 f"Avg Loss: {avg_loss:.2f} | "
                 f"Avg Reward: {avg_reward:.2f} | "
