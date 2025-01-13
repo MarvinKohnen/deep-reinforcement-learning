@@ -88,13 +88,13 @@ class Model():
         # only on first observation can we lazy initialize as we have no upfront information on the environment
         # Print the observation structure and shape
         self.n_observations = len(observation)
-        self.policy_net = Tabular(self.n_observations, self.n_actions).to(device)
+        self.policy_net = DQN(self.n_observations, self.n_actions).to(device)
         if self.load:
             try:
                 self.load_weights()
             except FileNotFoundError:
                 pass
-        self.target_net = Tabular(self.n_observations, self.n_actions).to(device)
+        self.target_net = DQN(self.n_observations, self.n_actions).to(device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.lr, amsgrad=True)
 
@@ -166,6 +166,7 @@ class Model():
         self.optimizer.step()
 
         self.update_target_net()
+        return loss.item()
 
     def update_target_net(self):
         """
@@ -185,9 +186,9 @@ class Model():
         if self.policy_net is None:
             self.lazy_init(old_state)
         self.memory.push(
-            torch.tensor(old_state, dtype=torch.float32),
+            old_state,
             torch.tensor([action], device=device, dtype=torch.int64),
-            None if new_state is None else torch.tensor(new_state, dtype=torch.float32),
+            None if new_state is None else new_state,
             torch.tensor([reward], device=device, dtype=torch.float32))
 
     def save_weights(self):
@@ -195,3 +196,7 @@ class Model():
 
     def load_weights(self):
         self.policy_net.load_state_dict(torch.load(self.path, weights_only=True, map_location=torch.device('cpu')))
+
+    def get_epsilon(self):
+        return self.eps_end + (self.eps_start - self.eps_end) * \
+            math.exp(-1. * self.steps / self.eps_decay)
