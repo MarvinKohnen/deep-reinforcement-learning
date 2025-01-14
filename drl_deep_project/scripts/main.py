@@ -4,9 +4,8 @@ from gymnasium.wrappers import RecordVideo
 
 from bomberman_rl import ScoreRewardWrapper, RestrictedKeysWrapper, FlattenWrapper, TimePenaltyRewardWrapper
 
-# from random_agent.agent
-from agent import RuleBasedAgent
-
+from argparsing import parse
+from rule_based_agent.agent import Agent
 
 class DummyAgent:
     def setup(self):
@@ -23,7 +22,6 @@ class DummyAgent:
 
     def end_of_round(self, *args, **kwargs):
         pass
-
 
 def loop(env, agent, args, n_episodes=100):
     for i in range(n_episodes):
@@ -53,7 +51,7 @@ def loop(env, agent, args, n_episodes=100):
     if not args.no_gui:
         quit = env.unwrapped.get_user_quit()
         while not quit:
-            time.sleep(0.5)  # wait for quit
+            time.sleep(0.5) # wait for quit
             quit = env.unwrapped.get_user_quit()
 
     env.close()
@@ -66,7 +64,6 @@ def provideAgent(passive: bool):
         # agent = Agent()
         agent = DummyAgent()
         return agent
-
 
 def main(argv=None):
     args = parse(argv)
@@ -81,9 +78,9 @@ def main(argv=None):
     if args.video:
         env = RecordVideo(env, video_folder=args.video, name_prefix=args.match_name)
 
-    # Agent setup
-    agent = RuleBasedAgent()
-    agent.setup()
+    agent = provideAgent(passive=args.passive)
+    if agent is None and not args.passive and not args.user_play:
+        raise AssertionError("Either provide an agent or run in passive mode by providing the command line argument --passive")
     if args.train:
         agent.setup_training()
 
