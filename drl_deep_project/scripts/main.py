@@ -5,7 +5,11 @@ from gymnasium.wrappers import RecordVideo
 from bomberman_rl import ScoreRewardWrapper, RestrictedKeysWrapper, FlattenWrapper, TimePenaltyRewardWrapper
 
 from argparsing import parse
-from rule_based_agent.agent import Agent
+# from bomberman_rl.envs.agent_code.rule_based_agent.agent import Agent
+# from learning_agent.agent import Agent
+from our_agent.agent import Agent
+from our_agent.utils import TrainingLogger
+from our_agent.q_learning import Model
 
 class DummyAgent:
     def setup(self):
@@ -23,10 +27,26 @@ class DummyAgent:
     def end_of_round(self, *args, **kwargs):
         pass
 
-def loop(env, agent, args, n_episodes=100):
-    for i in range(n_episodes):
+def loop(env, agent, args, n_episodes=50000):
+    # Create logger with path relative to our_agent directory
+    logger = TrainingLogger(
+        save_dir='scripts/our_agent/training_logs',
+        fresh=(args.weights == "fresh")
+    ) if args.train else None
+    
+    if args.train:
+        print(f"\nStarting training for {n_episodes} episodes...")
+        print(f"Logs and plots will be saved to: scripts/our_agent/training_logs")
+        print(f"Training started at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    start_time = time.time()
+    for episode in range(n_episodes):
         state, info = env.reset()
         terminated, truncated, quit = False, False, False
+        episode_reward = 0
+        episode_length = 0
+        episode_loss = 0
+        
         while not (terminated or truncated):
             if args.user_play:
                 action, quit = env.unwrapped.get_user_action()
@@ -39,14 +59,38 @@ def loop(env, agent, args, n_episodes=100):
             if quit:
                 env.close()
                 return None
-            else:
-                new_state, _, terminated, truncated, info = env.step(action)
-                if args.train:
-                    agent.game_events_occurred(state, action, new_state, info["events"])
-                state = new_state
+                
+            new_state, reward, terminated, truncated, info = env.step(action)
+            episode_length += 1
+            
+            if args.train:
+                # Get the shaped reward from our agent
+                shaped_reward = agent._shape_reward(info["events"])
+                episode_reward += shaped_reward  # Use our shaped reward instead
+                
+                loss = agent.game_events_occurred(state, action, new_state, info["events"])
+                if loss:
+                    episode_loss += loss
+            state = new_state
 
         if args.train:
             agent.end_of_round()
+            # Log episode stats
+            logger.log_episode(
+                episode=episode,
+                epsilon=agent.q_learning.get_epsilon(),
+                loss=episode_loss/episode_length if episode_length > 0 else 0,
+                reward=episode_reward,
+                episode_length=episode_length
+            )
+            
+            # Print progress every 10 episodes
+            if episode % 10 == 0:
+                print(f"Episode {episode:4d} | "
+                      f"Reward: {episode_reward:6.1f} | "
+                      f"Loss: {episode_loss/episode_length if episode_length > 0 else 0:6.3f} | "
+                      f"Epsilon: {agent.q_learning.get_epsilon():.3f} | "
+                      f"Length: {episode_length}")
 
     if not args.no_gui:
         quit = env.unwrapped.get_user_quit()
@@ -55,14 +99,19 @@ def loop(env, agent, args, n_episodes=100):
             quit = env.unwrapped.get_user_quit()
 
     env.close()
+    print("Training complete")
+    print(f"Training ended at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"That took {time.time() - start_time:.2f} seconds")
 
-
-def provideAgent(passive: bool):
+def provideAgent(passive: bool, weights: str = None):
     if passive:
         return DummyAgent()
     else:
-        # agent = Agent()
-        agent = DummyAgent()
+        agent = Agent()
+        if weights == "fresh":
+            agent.q_learning = Model(load=False)  # Don't load existing weights
+        elif weights:  # if weights is a timestamp
+            agent.q_learning.load_weights(suffix=weights)
         return agent
 
 def main(argv=None):
@@ -71,14 +120,14 @@ def main(argv=None):
 
     # Notice that you can not use wrappers in the tournament!
     # However, you might wanna use this example interface to kickstart your experiments
-    env = ScoreRewardWrapper(env)
-    env = TimePenaltyRewardWrapper(env, penalty=.1)
+    # env = ScoreRewardWrapper(env)
+    # env = TimePenaltyRewardWrapper(env, penalty=.1)
     #env = RestrictedKeysWrapper(env, keys=["self_pos"])
     #env = FlattenWrapper(env)
     if args.video:
         env = RecordVideo(env, video_folder=args.video, name_prefix=args.match_name)
 
-    agent = provideAgent(passive=args.passive)
+    agent = provideAgent(passive=args.passive, weights=args.weights)
     if agent is None and not args.passive and not args.user_play:
         raise AssertionError("Either provide an agent or run in passive mode by providing the command line argument --passive")
     if args.train:
