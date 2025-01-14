@@ -96,11 +96,13 @@ class Agent(LearningAgent):
         Shape rewards here instead of in an Environment Wrapper in order to be more flexible (e.g. use this agent as proper component of the environment where no environment wrappers are possible)
         """
         reward_mapping = {
-            e.COIN_COLLECTED: 1,
-            e.GOT_KILLED: -1,
-            e.KILLED_SELF: -1,
-            e.KILLED_OPPONENT: 5,
-            e.INVALID_ACTION: -0.1,
+            e.COIN_COLLECTED: 10,
+            e.KILLED_SELF: -5,
+            e.INVALID_ACTION: -0.5,
+            e.MOVED_LEFT: -0.1,      
+            e.MOVED_RIGHT: -0.1,   
+            e.MOVED_UP: -0.1,
+            e.MOVED_DOWN: -0.1,
         }
         return sum([reward_mapping.get(event, 0) for event in events])
 
