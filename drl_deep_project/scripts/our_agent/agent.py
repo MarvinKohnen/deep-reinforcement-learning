@@ -27,20 +27,28 @@ class Agent(LearningAgent):
         """
         self.q_learning = Model()
 
+
     def act(self, state, **kwargs) -> int:
         """
         Process state directly using all information except self_info and opponents_info
         """
-        # Convert relevant state components to tensor
-        state_tensor = torch.tensor([
-            state['walls'].flatten(),
-            state['crates'].flatten(),
-            state['coins'].flatten(),
-            state['bombs'].flatten(),
-            state['explosions'].flatten(),
-            state['self_pos'].flatten(),
-            state['opponents_pos'].flatten(),
-        ], device=device, dtype=torch.float32).flatten()
+        # Convert relevant state components to numpy arrays
+        state_elements = [
+            np.array(state['walls']).flatten(),
+            np.array(state['crates']).flatten(),
+            np.array(state['coins']).flatten(),
+            np.array(state['bombs']).flatten(),
+            np.array(state['explosions']).flatten(),
+            np.array(state['self_pos']).flatten(),
+            np.array(state['opponents_pos']).flatten(),
+            np.array([state['self_info']['bombs_left']])  # Wrap single value in list
+        ]
+
+        # Concatenate all elements into a single numpy array
+        state_array = np.concatenate(state_elements)
+
+        # Convert numpy array to tensor
+        state_tensor = torch.tensor(state_array, device=device, dtype=torch.float32)
 
         return self.q_learning.act(state_tensor)[0].item()
 
@@ -52,32 +60,39 @@ class Agent(LearningAgent):
         self.training_timestamp = time.strftime("%Y%m%d_%H%M%S")
         pass
 
-    def game_events_occurred(
-        self,
-        old_state,
-        self_action,
-        new_state,
-        events,
-    ):
+
+    def game_events_occurred(self, old_state, self_action, new_state, events):
         """
         After step in environment. Use this for model training.
         """
-        
-        # Process both states using get_scope_representation
-        old_state_processed = self.get_scope_representation(old_state)
-        new_state_processed = None if new_state is None else self.get_scope_representation(new_state)
-        
-        # Add custom events to the events list
-        custom_events = self._custom_events(old_state, new_state)
-        events.extend(custom_events)
-        
-        # Calculate reward with both standard and custom events
+        def state_to_tensor(state):
+            if state is None:
+                return None
+            
+            state_elements = [
+                np.array(state['walls']).flatten(),
+                np.array(state['crates']).flatten(),
+                np.array(state['coins']).flatten(),
+                np.array(state['bombs']).flatten(),
+                np.array(state['explosions']).flatten(),
+                np.array(state['self_pos']).flatten(),
+                np.array(state['opponents_pos']).flatten(),
+                np.array([state['self_info']['bombs_left']])  # Wrap single value in list
+            ]
+            
+            state_array = np.concatenate(state_elements)
+            return torch.tensor(state_array, device=device, dtype=torch.float32)
+
+        # Process both states
+        old_state_tensor = state_to_tensor(old_state)
+        new_state_tensor = state_to_tensor(new_state)
+
         reward = self._shape_reward(events)
-        
+
         self.q_learning.experience(
-            old_state=old_state_processed,
+            old_state=old_state_tensor,
             action=self_action,
-            new_state=new_state_processed,
+            new_state=new_state_tensor,
             reward=reward
         )
         return self.q_learning.optimize_incremental()
@@ -104,13 +119,16 @@ class Agent(LearningAgent):
         Shape rewards here instead of in an Environment Wrapper in order to be more flexible (e.g. use this agent as proper component of the environment where no environment wrappers are possible)
         """
         reward_mapping = {
-            e.COIN_COLLECTED: 10,
-            e.KILLED_SELF: -5,
+            e.COIN_COLLECTED: 1,
             e.INVALID_ACTION: -0.5,
-            e.MOVED_LEFT: -0.1,      
-            e.MOVED_RIGHT: -0.1,   
-            e.MOVED_UP: -0.1,
-            e.MOVED_DOWN: -0.1,
+            e.KILLED_OPPONENT: 5,
+            e.CRATE_DESTROYED: 0.1,
+            e.GOT_KILLED: -5,
+            e.WAITED: -0.1,
+            #e.MOVED_LEFT: -0.1,      
+            #e.MOVED_RIGHT: -0.1,   
+            #e.MOVED_UP: -0.1,
+            #e.MOVED_DOWN: -0.1,
         }
         return sum([reward_mapping.get(event, 0) for event in events])
 
@@ -177,7 +195,6 @@ class Agent(LearningAgent):
             agent_x - window_size : agent_x + window_size + 1, # (x+3)-3 : (x+3)+3+1 -> [x:x+7]
             agent_y - window_size : agent_y + window_size + 1  # (y+3)-3 : (y+3)+3+1 -> [y:y+7]
         ]
-        print(window)
         return torch.tensor(window, device=device, dtype=torch.float32).flatten()
 
     def get_danger_map(self, state):

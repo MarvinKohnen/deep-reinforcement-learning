@@ -1,5 +1,6 @@
 import os
 from configargparse import ArgParser
+import argparse
 
 from bomberman_rl import settings as s
 
@@ -70,6 +71,11 @@ def parse(argv=None):
         "--scenario",
         default="classic",
         choices=s.SCENARIOS
+    )
+    parser.add_argument(
+        "--weights",
+        default=None,
+        help="Specify 'fresh' for new weights or timestamp (e.g., '20240315_143022') to load specific checkpoint"
     )
 
     args = parser.parse_args(argv)
