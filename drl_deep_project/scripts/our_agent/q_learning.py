@@ -226,7 +226,7 @@ class Model():
         
         try:
             model_path = save_dir / filename
-            self.policy_net.load_state_dict(torch.load(model_path, weights_only=True))
+            self.policy_net.load_state_dict(torch.load(model_path, weights_only=True, map_location="cpu"))
             print(f"Successfully loaded weights from {filename}")
         except FileNotFoundError:
             print(f"No saved model found at {model_path}")
