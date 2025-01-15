@@ -79,17 +79,6 @@ class TrainingLogger:
         
         self.recent_rewards = deque(maxlen=window_size)
         self.recent_losses = deque(maxlen=window_size)
-        self.start_time = time.time()
-        
-        # Setup logging
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s [%(levelname)s] - %(message)s',
-            handlers=[
-                logging.FileHandler(self.save_dir / 'training.log'),
-            ]
-        )
-        self.logger = logging.getLogger(__name__)
 
     def log_episode(self, episode, epsilon, loss, reward, episode_length):
         # Adjust episode number to continue from previous training
@@ -105,20 +94,6 @@ class TrainingLogger:
         if loss:
             self.recent_losses.append(loss)
 
-        # Log to file at intervals
-        if episode > 0 and episode % 10 == 0:
-            avg_reward = np.mean(self.recent_rewards)
-            avg_loss = np.mean(self.recent_losses) if self.recent_losses else 0
-            elapsed_time = time.time() - self.start_time
-            
-            self.logger.info(
-                f"Episode {actual_episode:4d} | "
-                f"Epsilon: {epsilon:.2f} | "
-                f"Avg Loss: {avg_loss:.2f} | "
-                f"Avg Reward: {avg_reward:.2f} | "
-                f"Time: {elapsed_time:.0f}s"
-            )
-        
         self.save_stats()
         self.plot_training(save_only=True)
 
@@ -135,32 +110,54 @@ class TrainingLogger:
             json.dump({k: list(map(float, v)) for k, v in stats.items()}, f)
 
     def plot_training(self, save_only=False):
-        """Plot training progress using all collected data"""
-        fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(20, 5))
+        """Plot training progress using all collected data with smoothed curves"""
+        fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(20, 12))  # Changed to 4 rows, 1 column
+        
+        # Calculate rolling averages with dynamic window size
+        max_window = 100
+        
+        def rolling_average(data):
+            smoothed = []
+            for i in range(len(data)):
+                window = min(i + 1, max_window)  # Use all available data up to max_window
+                start_idx = max(0, i + 1 - window)
+                smoothed.append(np.mean(data[start_idx:i + 1]))
+            return np.array(smoothed)
+        
+        # Calculate smoothed data
+        rewards_smooth = rolling_average(self.rewards)
+        losses_smooth = rolling_average(self.losses)
+        lengths_smooth = rolling_average(self.episode_lengths)
         
         # Plot rewards
-        ax1.plot(self.steps, self.rewards)
+        ax1.plot(self.steps, self.rewards, 'black', alpha=0.3, label='Raw')
+        ax1.plot(self.steps, rewards_smooth, 'blue', label='Rolling Average')
         ax1.set_title('Episode Rewards')
         ax1.set_xlabel('Episode')
         ax1.set_ylabel('Reward')
+        ax1.legend()
         
         # Plot losses
-        ax2.plot(self.steps, self.losses)
+        ax2.plot(self.steps, self.losses, 'black', alpha=0.3, label='Raw')
+        ax2.plot(self.steps, losses_smooth, 'red', label='Rolling Average')
         ax2.set_title('Training Loss')
         ax2.set_xlabel('Episode')
         ax2.set_ylabel('Loss')
+        ax2.legend()
         
-        # Plot epsilon
+        # Plot epsilon (no smoothing)
         ax3.plot(self.steps, self.eps_values)
         ax3.set_title('Epsilon Value')
         ax3.set_xlabel('Episode')
         ax3.set_ylabel('Epsilon')
         
         # Plot episode lengths
-        ax4.plot(self.steps, self.episode_lengths)
+        ax4.plot(self.steps, self.episode_lengths, 'black', alpha=0.3, label='Raw')
+        ax4.plot(self.steps, lengths_smooth, 'purple', label='Rolling Average')
         ax4.set_title('Episode Lengths')
         ax4.set_xlabel('Episode')
         ax4.set_ylabel('Steps')
+        ax4.legend()
         
         plt.tight_layout()
         
