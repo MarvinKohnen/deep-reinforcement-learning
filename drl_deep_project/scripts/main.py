@@ -31,7 +31,9 @@ def loop(env, agent, args, n_episodes=50000):
     # Create logger with path relative to our_agent directory
     logger = TrainingLogger(
         save_dir='scripts/our_agent/training_logs',
-        fresh=(args.weights == "fresh")
+        fresh=(args.weights == "fresh"),
+        agent=agent,
+        scenario=args.scenario
     ) if args.train else None
     
     if args.train:

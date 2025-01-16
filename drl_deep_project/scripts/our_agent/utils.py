@@ -8,18 +8,29 @@ import json
 from pathlib import Path
 
 class TrainingLogger:
-    def __init__(self, window_size=100, save_dir='training_logs', fresh=False, agent=None):
+    def __init__(self, window_size=100, save_dir='training_logs', fresh=False, agent=None, scenario=None):
         # Create save directory
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(exist_ok=True)
         
+        # Import settings for board size
+        from bomberman_rl.envs import settings
+        
         # Store agent reference
         self.agent = agent
         
-        # Initialize config
+        # Initialize config with empty model info (will be updated later)
         self.config = {
+            'model': {},  # Will be populated after lazy initialization
             'hyperparameters': agent.q_learning.get_hyperparameters() if agent and agent.q_learning else {},
-            'reward_mapping': agent.get_reward_mapping() if agent else {}
+            'reward_mapping': agent.get_reward_mapping() if agent else {},
+            'env': {
+                'scenario': scenario if scenario else 'classic',
+                'board_size': {
+                    'rows': settings.ROWS,
+                    'cols': settings.COLS
+                }
+            }
         }
         
         # If fresh training, archive existing stats
@@ -90,6 +101,11 @@ class TrainingLogger:
         self.recent_losses = deque(maxlen=window_size)
 
     def log_episode(self, episode, epsilon, loss, reward, episode_length):
+        # Update model info if it's now available
+        if self.agent and self.agent.q_learning and self.agent.q_learning.policy_net:
+            if not self.config['model']:  # Only update if empty
+                self.config['model'] = self.agent.q_learning.policy_net.get_architecture_info()
+        
         # Adjust episode number to continue from previous training
         actual_episode = episode + self.episode_offset
         
@@ -108,17 +124,30 @@ class TrainingLogger:
 
     def save_stats(self):
         """Save training statistics and configuration to file"""
+        def convert_to_native_types(obj):
+            if isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, list):
+                return [convert_to_native_types(item) for item in obj]
+            elif isinstance(obj, dict):
+                return {key: convert_to_native_types(value) for key, value in obj.items()}
+            return obj
+
         stats = {
-            'config': self.config,  # Config first
-            'rewards': [round(r, 4) for r in self.rewards],
-            'losses': [round(l, 4) for l in self.losses],
-            'eps_values': [round(e, 4) for e in self.eps_values],
-            'steps': self.steps,
-            'episode_lengths': self.episode_lengths
+            'config': convert_to_native_types(self.config),
+            'rewards': [round(float(r), 4) for r in self.rewards],
+            'losses': [round(float(l), 4) for l in self.losses],
+            'eps_values': [round(float(e), 4) for e in self.eps_values],
+            'steps': [int(s) for s in self.steps],
+            'episode_lengths': [int(l) for l in self.episode_lengths]
         }
+        
         with open(self.save_dir / 'training_stats.json', 'w') as f:
-            json.dump({k: list(map(float, v)) if isinstance(v, list) and k != 'config' else v 
-                      for k, v in stats.items()}, f, indent=4)
+            json.dump(stats, f, indent=4)
 
     def plot_training(self, save_only=False):
         """Plot training progress using all collected data with smoothed curves"""

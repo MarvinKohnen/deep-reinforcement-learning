@@ -54,6 +54,17 @@ class DQN(nn.Module):
         x = F.relu(self.layer2(x))
         return self.layer3(x)
     
+    def get_architecture_info(self):
+        """Return the model's architecture information"""
+        return {
+            'type': self.__class__.__name__,
+            'input_size': self.layer1.in_features,
+            'hidden_layers': [
+                self.layer1.out_features,
+                self.layer2.out_features
+            ],
+            'output_size': self.layer3.out_features
+        }
 
 class Tabular(nn.Module):
     """ State approximation via Multi-Layer Perceptron """
@@ -250,3 +261,9 @@ class Model():
             'gradient_clipping': self.gradient_clipping,
             'memory_size': self.memory.memory.maxlen
         }
+
+    def get_model_info(self):
+        """Return model architecture information"""
+        if self.policy_net is None:
+            return {}
+        return self.policy_net.get_architecture_info()
