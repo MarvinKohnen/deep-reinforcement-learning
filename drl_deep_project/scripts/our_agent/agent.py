@@ -19,8 +19,8 @@ class Agent(LearningAgent):
     """
     def __init__(self):
         self.pos = (0,0)
-        self.flipUD = 1
-        self.flipLR = 1
+        self.flipUD = 0
+        self.flipLR = 0
         self.setup()
         self.setup_training()
 
@@ -31,32 +31,35 @@ class Agent(LearningAgent):
         self.q_learning = Model()
 
     def transform_observation(self, obs):
-        if self.flipUD == -1:
+        if self.flipUD == 1:
             obs = np.array(np.flipud(obs))
-        if self.flipLR == -1:
+        if self.flipLR == 1:
             obs = np.array(np.fliplr(obs))
         return obs
 
     def transform_action(self, action):
-        if self.flipUD == -1 and (action == 2 or action == 0):
+        if self.flipUD == 1 and (action == 2 or action == 0):
             return abs(action-2)
-        if self.flipLR == -1 and (action == 1 or action == 3):
+        if self.flipLR == 1 and (action == 1 or action == 3):
             return 1 if action == 3 else 3
         return action
 
-    def update_transformation(self, old_state, self_action):
-        old_pos = tuple(np.array(old_state['self_pos'] > 0).nonzero()[0])
-        height = len(old_state['self_pos'])
-        width = len(old_state['self_pos'][0])
-        if old_pos[0] == (height+1)//2 - 1 and self.transform_action(self_action) == 2:
-            self.flipUD *= -1
-        if old_pos[1] == (width+1)//2 - 1 and self.transform_action(self_action) == 1:
-            self.flipLR *= -1
+    def update_transformation(self, state):
+        pos = tuple(np.array(state['self_pos'] > 0).nonzero()[0])
+        height = len(state['self_pos'])
+        width = len(state['self_pos'][0])
+        if pos[0] > (height+1)//2 - 1:
+            self.flipUD = 1
+        if pos[1] > (width+1)//2 - 1:
+            self.flipLR = 1
 
     def act(self, state, **kwargs) -> int:
         """
         Process state directly using all information except self_info and opponents_info
         """
+        # Update transformation variables
+        self.update_transformation(state)
+
         # Convert relevant state components to numpy arrays
         state_elements = [
             np.array(state['walls']).flatten(),
@@ -90,9 +93,6 @@ class Agent(LearningAgent):
         """
         After step in environment. Use this for model training.
         """
-
-        self.update_transformation(old_state, self_action)
-
         def state_to_tensor(state):
             if state is None:
                 return None
