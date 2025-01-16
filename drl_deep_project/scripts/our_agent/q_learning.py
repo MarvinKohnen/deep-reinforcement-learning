@@ -236,3 +236,17 @@ class Model():
     def get_epsilon(self):
         return self.eps_end + (self.eps_start - self.eps_end) * \
             math.exp(-1. * self.steps / self.eps_decay)
+
+    def get_hyperparameters(self):
+        """Return the model's hyperparameters"""
+        return {
+            'batch_size': self.batch_size,
+            'gamma': self.gamma,
+            'eps_start': self.eps_start,
+            'eps_end': self.eps_end,
+            'eps_decay': self.eps_decay,
+            'tau': self.tau,
+            'lr': self.lr,
+            'gradient_clipping': self.gradient_clipping,
+            'memory_size': self.memory.memory.maxlen
+        }

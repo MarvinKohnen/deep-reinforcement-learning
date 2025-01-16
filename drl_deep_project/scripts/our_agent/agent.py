@@ -18,6 +18,16 @@ class Agent(LearningAgent):
     (Demonstration only - do not inherit)
     """
     def __init__(self):
+        # Define reward mapping as class attribute
+        self.reward_mapping = {
+            e.COIN_COLLECTED: 1,
+            e.KILLED_SELF: -5,
+            e.INVALID_ACTION: -0.5,
+            e.KILLED_OPPONENT: 5,
+            e.CRATE_DESTROYED: 0.1,
+            e.GOT_KILLED: -5,
+            e.WAITED: -0.1,
+        }
         self.setup()
         self.setup_training()
 
@@ -116,22 +126,9 @@ class Agent(LearningAgent):
 
     def _shape_reward(self, events: list[str]) -> float:
         """
-        Shape rewards here instead of in an Environment Wrapper in order to be more flexible (e.g. use this agent as proper component of the environment where no environment wrappers are possible)
+        Shape rewards using the reward mapping defined in __init__
         """
-        reward_mapping = {
-            e.COIN_COLLECTED: 1,
-            e.KILLED_SELF: -5,
-            e.INVALID_ACTION: -0.5,
-            e.KILLED_OPPONENT: 5,
-            e.CRATE_DESTROYED: 0.1,
-            e.GOT_KILLED: -5,
-            e.WAITED: -0.1,
-            #e.MOVED_LEFT: -0.1,      
-            #e.MOVED_RIGHT: -0.1,   
-            #e.MOVED_UP: -0.1,
-            #e.MOVED_DOWN: -0.1,
-        }
-        return sum([reward_mapping.get(event, 0) for event in events])
+        return sum([self.reward_mapping.get(event, 0) for event in events])
 
     def get_scope_representation(self, state):
         # Get state information
@@ -256,6 +253,10 @@ class Agent(LearningAgent):
                             wall_hit_left = True
 
         return danger_map
+
+    def get_reward_mapping(self):
+        """Return the reward mapping"""
+        return self.reward_mapping
 
 
 

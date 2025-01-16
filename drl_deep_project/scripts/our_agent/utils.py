@@ -8,10 +8,19 @@ import json
 from pathlib import Path
 
 class TrainingLogger:
-    def __init__(self, window_size=100, save_dir='training_logs', fresh=False):
+    def __init__(self, window_size=100, save_dir='training_logs', fresh=False, agent=None):
         # Create save directory
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(exist_ok=True)
+        
+        # Store agent reference
+        self.agent = agent
+        
+        # Initialize config
+        self.config = {
+            'hyperparameters': agent.q_learning.get_hyperparameters() if agent and agent.q_learning else {},
+            'reward_mapping': agent.get_reward_mapping() if agent else {}
+        }
         
         # If fresh training, archive existing stats
         if fresh:
@@ -98,8 +107,9 @@ class TrainingLogger:
         self.plot_training(save_only=True)
 
     def save_stats(self):
-        """Save training statistics to file"""
+        """Save training statistics and configuration to file"""
         stats = {
+            'config': self.config,  # Config first
             'rewards': [round(r, 4) for r in self.rewards],
             'losses': [round(l, 4) for l in self.losses],
             'eps_values': [round(e, 4) for e in self.eps_values],
@@ -107,7 +117,8 @@ class TrainingLogger:
             'episode_lengths': self.episode_lengths
         }
         with open(self.save_dir / 'training_stats.json', 'w') as f:
-            json.dump({k: list(map(float, v)) for k, v in stats.items()}, f)
+            json.dump({k: list(map(float, v)) if isinstance(v, list) and k != 'config' else v 
+                      for k, v in stats.items()}, f, indent=4)
 
     def plot_training(self, save_only=False):
         """Plot training progress using all collected data with smoothed curves"""
