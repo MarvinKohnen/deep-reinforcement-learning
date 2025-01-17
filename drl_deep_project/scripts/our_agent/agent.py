@@ -30,15 +30,48 @@ class Agent(LearningAgent):
         """
         self.q_learning = Model()
 
-    def transform_observation(self, obs):
+    def transform_state(self, state):
+        for key in state:
+            if key == 'round' or key == 'step':
+                continue
+            elif key == 'self_info':
+                state[key]['position'] = self.transform_map(state[key]['position'])
+            elif key == 'opponents_info':
+                for op in key:
+                    state[key][op]['position'] = self.transform_map(state[key][op]['position'])
+            else:
+                state[key] = self.transform_map(state[key])
+
+
+    '''
+    {
+    'round': int,
+    'step': int,
+    'walls': np.array((17, 17), dtype=int16),
+    'crates': np.array((17, 17), dtype=int16),
+    'coins': np.array((17, 17), dtype=int16),
+    'bombs': np.array((17, 17), dtype=int16),
+    'explosions': np.array((17, 17), dtype=int16),
+    'self_pos': np.array((17, 17), dtype=int16),
+    'opponents_pos': np.array((17, 17), dtype=int16),
+    'self_info': {
+        'score': int,
+        'bombs_left': int,
+        'position': np.array((17, 17), dtype=int16)
+    }
+    'opponents_info': ({...}, {...}, {...})
+}
+    '''
+
+    def transform_map(self, map):
         #print(obs)
         #print("flipud:", self.flipUD)
         #print("fliplr:", self.flipLR)
         if self.flipUD == 1:
-            obs = np.array(np.flipud(obs))
+            map = np.array(np.flipud(map))
         if self.flipLR == 1:
-            obs = np.array(np.fliplr(obs))
-        return obs
+            map = np.array(np.fliplr(map))
+        return map
 
     def transform_action(self, action):
         if self.flipUD == 1 and (action == 2 or action == 0):
@@ -66,13 +99,13 @@ class Agent(LearningAgent):
 
         # Convert relevant state components to numpy arrays
         state_elements = [
-            self.transform_observation(np.array(state['walls'])).flatten(),
-            self.transform_observation(np.array(state['crates'])).flatten(),
-            self.transform_observation(np.array(state['coins'])).flatten(),
-            self.transform_observation(np.array(state['bombs'])).flatten(),
-            self.transform_observation(np.array(state['explosions'])).flatten(),
-            self.transform_observation(np.array(state['self_pos'])).flatten(),
-            self.transform_observation(np.array(state['opponents_pos'])).flatten(),
+            self.transform_map(np.array(state['walls'])).flatten(),
+            self.transform_map(np.array(state['crates'])).flatten(),
+            self.transform_map(np.array(state['coins'])).flatten(),
+            self.transform_map(np.array(state['bombs'])).flatten(),
+            self.transform_map(np.array(state['explosions'])).flatten(),
+            self.transform_map(np.array(state['self_pos'])).flatten(),
+            self.transform_map(np.array(state['opponents_pos'])).flatten(),
             np.array([state['self_info']['bombs_left']])
         ]
 
@@ -102,13 +135,13 @@ class Agent(LearningAgent):
                 return None
             
             state_elements = [
-                self.transform_observation(np.array(state['walls'])).flatten(),
-                self.transform_observation(np.array(state['crates'])).flatten(),
-                self.transform_observation(np.array(state['coins'])).flatten(),
-                self.transform_observation(np.array(state['bombs'])).flatten(),
-                self.transform_observation(np.array(state['explosions'])).flatten(),
-                self.transform_observation(np.array(state['self_pos'])).flatten(),
-                self.transform_observation(np.array(state['opponents_pos'])).flatten(),
+                self.transform_map(np.array(state['walls'])).flatten(),
+                self.transform_map(np.array(state['crates'])).flatten(),
+                self.transform_map(np.array(state['coins'])).flatten(),
+                self.transform_map(np.array(state['bombs'])).flatten(),
+                self.transform_map(np.array(state['explosions'])).flatten(),
+                self.transform_map(np.array(state['self_pos'])).flatten(),
+                self.transform_map(np.array(state['opponents_pos'])).flatten(),
                 np.array([state['self_info']['bombs_left']])  # Wrap single value in list
             ]
             
