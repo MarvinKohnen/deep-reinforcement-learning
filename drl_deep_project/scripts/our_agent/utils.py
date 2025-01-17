@@ -9,8 +9,34 @@ from pathlib import Path
 
 class TrainingLogger:
     def __init__(self, window_size=100, save_dir='training_logs', fresh=False, agent=None, scenario=None):
-        # Create save directory
-        self.save_dir = Path(save_dir)
+        # Create base save directory
+        self.base_dir = Path(save_dir)
+        self.base_dir.mkdir(exist_ok=True)
+        
+        # Get or create model timestamp
+        if fresh:
+            # New model gets new timestamp
+            self.model_timestamp = time.strftime("%Y%m%d_%H%M%S")
+        else:
+            # Try to get timestamp from existing model
+            if agent and agent.training_timestamp:
+                self.model_timestamp = agent.training_timestamp
+            else:
+                # Try to find most recent model directory
+                model_dirs = [d for d in self.base_dir.iterdir() if d.is_dir() and d.name.startswith('model_')]
+                if model_dirs:
+                    latest_model = max(model_dirs, key=lambda x: x.name)
+                    self.model_timestamp = latest_model.name.replace('model_', '')
+                else:
+                    self.model_timestamp = time.strftime("%Y%m%d_%H%M%S")
+        
+        # Create model directory
+        self.model_dir = self.base_dir / f"model_{self.model_timestamp}"
+        self.model_dir.mkdir(exist_ok=True)
+        
+        # Create timestamped directory for this run
+        run_timestamp = time.strftime("%Y%m%d_%H%M%S")
+        self.save_dir = self.model_dir / f"run_{run_timestamp}"
         self.save_dir.mkdir(exist_ok=True)
         
         # Import settings for board size
@@ -19,9 +45,9 @@ class TrainingLogger:
         # Store agent reference
         self.agent = agent
         
-        # Initialize config with empty model info (will be updated later)
+        # Initialize config
         self.config = {
-            'model': {},  # Will be populated after lazy initialization
+            'model': {},
             'hyperparameters': agent.q_learning.get_hyperparameters() if agent and agent.q_learning else {},
             'reward_mapping': agent.get_reward_mapping() if agent else {},
             'env': {
@@ -33,41 +59,7 @@ class TrainingLogger:
             }
         }
         
-        # If fresh training, archive existing stats
         if fresh:
-            # Find most recent model file to get its timestamp
-            model_dir = Path('scripts/our_agent/models')
-            model_files = list(model_dir.glob("dqn_*.pt"))
-            
-            # Only proceed with archiving if there are model files and training data
-            if model_files and any([
-                (self.save_dir / 'training_stats.json').exists(),
-                (self.save_dir / 'training_progress.png').exists(),
-                (self.save_dir / 'training.log').exists()
-            ]):
-                # Extract timestamp from the most recent model file
-                latest_model = max(model_files, key=lambda x: x.stat().st_mtime)
-                timestamp = latest_model.name.replace('dqn_', '').replace('.pt', '')
-                print(f"\nArchiving previous training run with timestamp {timestamp}")
-                
-                # Create archive directory with model timestamp
-                archive_dir = self.save_dir / f"archive_{timestamp}"
-                archive_dir.mkdir(exist_ok=True)
-                
-                # Move existing files to archive
-                if (self.save_dir / 'training_stats.json').exists():
-                    (self.save_dir / 'training_stats.json').rename(archive_dir / 'training_stats.json')
-                if (self.save_dir / 'training_progress.png').exists():
-                    (self.save_dir / 'training_progress.png').rename(archive_dir / 'training_progress.png')
-                if (self.save_dir / 'training.log').exists():
-                    (self.save_dir / 'training.log').rename(archive_dir / 'training.log')
-                    
-                print(f"Previous training logs archived to: {archive_dir}")
-            else:
-                print("\nNo previous training data found")
-                
-            print("Starting fresh training run with new network!\n")
-            
             # Start with fresh stats
             self.rewards = []
             self.losses = []
@@ -76,20 +68,29 @@ class TrainingLogger:
             self.episode_lengths = []
             self.episode_offset = 0
         else:
-            # Try to load existing stats
-            stats_file = self.save_dir / 'training_stats.json'
-            if stats_file.exists():
-                with open(stats_file, 'r') as f:
-                    saved_stats = json.load(f)
-                    self.rewards = saved_stats.get('rewards', [])
-                    self.losses = saved_stats.get('losses', [])
-                    self.eps_values = saved_stats.get('eps_values', [])
-                    self.steps = [int(x) for x in saved_stats.get('steps', [])]
-                    self.episode_lengths = saved_stats.get('episode_lengths', [])
-                    
-                    # If there are existing steps, next episode should continue from last one
-                    self.episode_offset = int(self.steps[-1] + 1) if self.steps else 0
+            # Try to find most recent run's stats
+            prev_runs = sorted([d for d in self.model_dir.iterdir() if d.is_dir() and d.name.startswith('run_')])
+            if prev_runs:
+                latest_run = prev_runs[-1]
+                stats_file = latest_run / 'training_stats.json'
+                if stats_file.exists():
+                    with open(stats_file, 'r') as f:
+                        saved_stats = json.load(f)
+                        self.rewards = saved_stats.get('rewards', [])
+                        self.losses = saved_stats.get('losses', [])
+                        self.eps_values = saved_stats.get('eps_values', [])
+                        self.steps = [int(x) for x in saved_stats.get('steps', [])]
+                        self.episode_lengths = saved_stats.get('episode_lengths', [])
+                        self.episode_offset = int(self.steps[-1] + 1) if self.steps else 0
+                else:
+                    self.rewards = []
+                    self.losses = []
+                    self.eps_values = []
+                    self.steps = []
+                    self.episode_lengths = []
+                    self.episode_offset = 0
             else:
+                # No previous runs found
                 self.rewards = []
                 self.losses = []
                 self.eps_values = []

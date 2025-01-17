@@ -82,9 +82,9 @@ class Model():
     def __init__(self, load=True, path=Path(__file__).parent / "model.pt"):
         self.batch_size = 128 # self.batch_size is the number of transitions sampled from the replay buffer
         self.gamma = 0.99 # self.gamma is the discount factor
-        self.eps_start = 0.1 # self.eps_start is the starting value of epsilon
+        self.eps_start = 0.9 # self.eps_start is the starting value of epsilon
         self.eps_end = 0.1 # self.eps_end is the final value of epsilon
-        self.eps_decay = 3000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
+        self.eps_decay = 50000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
         self.tau = 0.005 # self.tau is the update rate of the target network
         self.lr = 1e-4 # self.lr is the learning rate of the ``AdamW`` optimizer
         self.gradient_clipping = 100
@@ -108,20 +108,25 @@ class Model():
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.lr, amsgrad=True)
 
-    def act(self, state):
+    def act(self, state, eval_mode=False):
         if self.policy_net is None:
             self.lazy_init(state)
         self.steps += 1
         state = state.clone().detach().to(device).unsqueeze(0)
+        
+        # Always act greedily during evaluation
+        if eval_mode:
+            self.policy_net.eval()
+            with torch.no_grad():
+                return self.policy_net(state).max(1).indices
+        
+        # Epsilon-greedy during training
         eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * \
             math.exp(-1. * self.steps / self.eps_decay)
         sample = random.random()
         if sample > eps_threshold:
             self.policy_net.eval()
             with torch.no_grad():
-                # t.max(1) will return the largest column value of each row.
-                # second column on max result is index of where max element was
-                # found, so we pick action with the larger expected reward.
                 return self.policy_net(state).max(1).indices
         else:
             return torch.tensor([ActionSpace.sample()], device=device, dtype=torch.long)
@@ -195,10 +200,15 @@ class Model():
         """
         if self.policy_net is None:
             self.lazy_init(old_state)
+        
+        # Convert numpy arrays to tensors
+        old_state_tensor = torch.tensor(old_state, device=device, dtype=torch.float32)
+        new_state_tensor = None if new_state is None else torch.tensor(new_state, device=device, dtype=torch.float32)
+        
         self.memory.push(
-            old_state,
+            old_state_tensor,
             torch.tensor([action], device=device, dtype=torch.int64),
-            None if new_state is None else new_state,
+            new_state_tensor,
             torch.tensor([reward], device=device, dtype=torch.float32))
 
     def save_weights(self, suffix=None):

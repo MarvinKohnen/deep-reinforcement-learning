@@ -27,7 +27,7 @@ class DummyAgent:
     def end_of_round(self, *args, **kwargs):
         pass
 
-def loop(env, agent, args, n_episodes=50000):
+def loop(env, agent, args, n_episodes=20000):
     # Create logger with path relative to our_agent directory
     logger = TrainingLogger(
         save_dir='scripts/our_agent/training_logs',
@@ -56,7 +56,7 @@ def loop(env, agent, args, n_episodes=50000):
                     time.sleep(0.1)  # wait for user action or quit
                     action, quit = env.unwrapped.get_user_action()
             else:
-                action, quit = agent.act(state), env.unwrapped.get_user_quit()
+                action, quit = agent.act(state, train=args.train), env.unwrapped.get_user_quit()
 
             if quit:
                 env.close()
@@ -123,7 +123,7 @@ def main(argv=None):
     # Notice that you can not use wrappers in the tournament!
     # However, you might wanna use this example interface to kickstart your experiments
     # env = ScoreRewardWrapper(env)
-    # env = TimePenaltyRewardWrapper(env, penalty=.1)
+    # env = TimePenaltyRewardWrapper(env, penalty=.5)
     #env = RestrictedKeysWrapper(env, keys=["self_pos"])
     #env = FlattenWrapper(env)
     if args.video:
