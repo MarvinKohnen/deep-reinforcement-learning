@@ -31,6 +31,7 @@ class Agent(LearningAgent):
         self.q_learning = Model()
 
     def transform_state(self, state):
+        self.update_transformation(state)
         for key in state:
             if key == 'round' or key == 'step':
                 continue
@@ -74,17 +75,17 @@ class Agent(LearningAgent):
         Process state directly using all information except self_info and opponents_info
         """
         # Update transformation variables
-        self.update_transformation(state)
+        self.transform_state(state)
 
         # Convert relevant state components to numpy arrays
         state_elements = [
-            self.transform_map(np.array(state['walls'])).flatten(),
-            self.transform_map(np.array(state['crates'])).flatten(),
-            self.transform_map(np.array(state['coins'])).flatten(),
-            self.transform_map(np.array(state['bombs'])).flatten(),
-            self.transform_map(np.array(state['explosions'])).flatten(),
-            self.transform_map(np.array(state['self_pos'])).flatten(),
-            self.transform_map(np.array(state['opponents_pos'])).flatten(),
+            np.array(state['walls']).flatten(),
+            np.array(state['crates']).flatten(),
+            np.array(state['coins']).flatten(),
+            np.array(state['bombs']).flatten(),
+            np.array(state['explosions']).flatten(),
+            np.array(state['self_pos']).flatten(),
+            np.array(state['opponents_pos']).flatten(),
             np.array([state['self_info']['bombs_left']])
         ]
 
@@ -109,18 +110,22 @@ class Agent(LearningAgent):
         """
         After step in environment. Use this for model training.
         """
+
+        self.transform_state(old_state)
+        self.transform_state(new_state)
+
         def state_to_tensor(state):
             if state is None:
                 return None
             
             state_elements = [
-                self.transform_map(np.array(state['walls'])).flatten(),
-                self.transform_map(np.array(state['crates'])).flatten(),
-                self.transform_map(np.array(state['coins'])).flatten(),
-                self.transform_map(np.array(state['bombs'])).flatten(),
-                self.transform_map(np.array(state['explosions'])).flatten(),
-                self.transform_map(np.array(state['self_pos'])).flatten(),
-                self.transform_map(np.array(state['opponents_pos'])).flatten(),
+                np.array(state['walls']).flatten(),
+                np.array(state['crates']).flatten(),
+                np.array(state['coins']).flatten(),
+                np.array(state['bombs']).flatten(),
+                np.array(state['explosions']).flatten(),
+                np.array(state['self_pos']).flatten(),
+                np.array(state['opponents_pos']).flatten(),
                 np.array([state['self_info']['bombs_left']])  # Wrap single value in list
             ]
             
