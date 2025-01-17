@@ -18,7 +18,7 @@ class Agent(LearningAgent):
     (Demonstration only - do not inherit)
     """
     def __init__(self):
-        self.pos = (0,0)
+#        self.pos = (0,0)
         self.flipUD = 0
         self.flipLR = 0
         self.setup()
@@ -31,6 +31,9 @@ class Agent(LearningAgent):
         self.q_learning = Model()
 
     def transform_observation(self, obs):
+        #print(obs)
+        #print("flipud:", self.flipUD)
+        #print("fliplr:", self.flipLR)
         if self.flipUD == 1:
             obs = np.array(np.flipud(obs))
         if self.flipLR == 1:
@@ -45,7 +48,8 @@ class Agent(LearningAgent):
         return action
 
     def update_transformation(self, state):
-        pos = tuple(np.array(state['self_pos'] > 0).nonzero()[0])
+        pos = np.argwhere(state["self_pos"] == 1)[0]
+        #print("pos: ", pos)
         height = len(state['self_pos'])
         width = len(state['self_pos'][0])
         if pos[0] > (height+1)//2 - 1:
@@ -62,14 +66,14 @@ class Agent(LearningAgent):
 
         # Convert relevant state components to numpy arrays
         state_elements = [
-            np.array(state['walls']).flatten(),
-            np.array(state['crates']).flatten(),
-            np.array(state['coins']).flatten(),
-            np.array(state['bombs']).flatten(),
-            np.array(state['explosions']).flatten(),
-            np.array(state['self_pos']).flatten(),
-            np.array(state['opponents_pos']).flatten(),
-            np.array([state['self_info']['bombs_left']])  # Wrap single value in list
+            self.transform_observation(np.array(state['walls'])).flatten(),
+            self.transform_observation(np.array(state['crates'])).flatten(),
+            self.transform_observation(np.array(state['coins'])).flatten(),
+            self.transform_observation(np.array(state['bombs'])).flatten(),
+            self.transform_observation(np.array(state['explosions'])).flatten(),
+            self.transform_observation(np.array(state['self_pos'])).flatten(),
+            self.transform_observation(np.array(state['opponents_pos'])).flatten(),
+            np.array([state['self_info']['bombs_left']])
         ]
 
         # Concatenate all elements into a single numpy array
@@ -78,7 +82,7 @@ class Agent(LearningAgent):
         # Convert numpy array to tensor
         state_tensor = torch.tensor(state_array, device=device, dtype=torch.float32)
 
-        return self.q_learning.act(state_tensor)[0].item()
+        return self.transform_action(self.q_learning.act(state_tensor)[0].item())
 
     def setup_training(self):
         """
@@ -98,13 +102,13 @@ class Agent(LearningAgent):
                 return None
             
             state_elements = [
-                np.array(state['walls']).flatten(),
-                np.array(state['crates']).flatten(),
-                np.array(state['coins']).flatten(),
-                np.array(state['bombs']).flatten(),
-                np.array(state['explosions']).flatten(),
-                np.array(state['self_pos']).flatten(),
-                np.array(state['opponents_pos']).flatten(),
+                self.transform_observation(np.array(state['walls'])).flatten(),
+                self.transform_observation(np.array(state['crates'])).flatten(),
+                self.transform_observation(np.array(state['coins'])).flatten(),
+                self.transform_observation(np.array(state['bombs'])).flatten(),
+                self.transform_observation(np.array(state['explosions'])).flatten(),
+                self.transform_observation(np.array(state['self_pos'])).flatten(),
+                self.transform_observation(np.array(state['opponents_pos'])).flatten(),
                 np.array([state['self_info']['bombs_left']])  # Wrap single value in list
             ]
             
