@@ -42,27 +42,6 @@ class Agent(LearningAgent):
             else:
                 state[key] = self.transform_map(state[key])
 
-
-    '''
-    {
-    'round': int,
-    'step': int,
-    'walls': np.array((17, 17), dtype=int16),
-    'crates': np.array((17, 17), dtype=int16),
-    'coins': np.array((17, 17), dtype=int16),
-    'bombs': np.array((17, 17), dtype=int16),
-    'explosions': np.array((17, 17), dtype=int16),
-    'self_pos': np.array((17, 17), dtype=int16),
-    'opponents_pos': np.array((17, 17), dtype=int16),
-    'self_info': {
-        'score': int,
-        'bombs_left': int,
-        'position': np.array((17, 17), dtype=int16)
-    }
-    'opponents_info': ({...}, {...}, {...})
-}
-    '''
-
     def transform_map(self, map):
         #print(obs)
         #print("flipud:", self.flipUD)
