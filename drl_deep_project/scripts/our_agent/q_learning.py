@@ -4,6 +4,7 @@ import math
 import random
 from pathlib import Path
 from collections import namedtuple, deque
+import time
 
 import torch
 import torch.nn as nn
@@ -79,12 +80,12 @@ class Tabular(nn.Module):
         return self.layer1(x)
     
 class Model():
-    def __init__(self, load=True, path=Path(__file__).parent / "model.pt"):
+    def __init__(self, load=True, path=Path(__file__).parent / "model.pt", weights_suffix=None):
         self.batch_size = 128 # self.batch_size is the number of transitions sampled from the replay buffer
         self.gamma = 0.99 # self.gamma is the discount factor
         self.eps_start = 0.9 # self.eps_start is the starting value of epsilon
         self.eps_end = 0.1 # self.eps_end is the final value of epsilon
-        self.eps_decay = 50000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
+        self.eps_decay = 5000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
         self.tau = 0.005 # self.tau is the update rate of the target network
         self.lr = 1e-4 # self.lr is the learning rate of the ``AdamW`` optimizer
         self.gradient_clipping = 100
@@ -94,17 +95,22 @@ class Model():
         self.n_actions = ActionSpace.n
         self.memory = ReplayMemory(10_000)
         self.policy_net = None
+        self.weights_suffix = weights_suffix  # Store the source weights suffix
+        self.training_timestamp = time.strftime("%Y%m%d_%H%M%S")  # New timestamp for this run
 
     def lazy_init(self, observation):
         # only on first observation can we lazy initialize as we have no upfront information on the environment
         self.n_observations = len(observation)
         self.policy_net = DQN(self.n_observations, self.n_actions).to(device)
+        self.target_net = DQN(self.n_observations, self.n_actions).to(device)  # Create target_net first
+        
         if self.load:
             try:
-                self.load_weights()
+                self.load_weights(self.weights_suffix)  # Pass weights_suffix here
             except FileNotFoundError:
                 pass
-        self.target_net = DQN(self.n_observations, self.n_actions).to(device)
+        
+        # Load target net after policy net is loaded
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.lr, amsgrad=True)
 
@@ -211,27 +217,19 @@ class Model():
             new_state_tensor,
             torch.tensor([reward], device=device, dtype=torch.float32))
 
-    def save_weights(self, suffix=None):
-        """Save model weights with optional timestamp suffix"""
+    def save_weights(self):
+        """Save model with new timestamp"""
         save_dir = Path("scripts/our_agent/models")
         save_dir.mkdir(exist_ok=True)
-        
-        if suffix:
-            filename = f"dqn_{suffix}.pt"
-        else:
-            filename = "dqn.pt"
-        
+        filename = f"dqn_{self.training_timestamp}.pt"
         torch.save(self.policy_net.state_dict(), save_dir / filename)
+        print(f"Saved model as: {filename}")
 
     def load_weights(self, suffix=None):
-        """
-        Load model weights. If suffix is provided, load that specific version.
-        Otherwise, try to load the most recent version.
-        """
+        """Load model weights from a specific version or most recent"""
         save_dir = Path("scripts/our_agent/models")
         
         if suffix:
-            # Load specific version
             filename = f"dqn_{suffix}.pt"
         else:
             # Try to load the most recent version
@@ -239,18 +237,14 @@ class Model():
             if not model_files:
                 print("No saved model found. Starting with fresh weights.")
                 return
-            
-            # Sort by timestamp (newest first)
             latest_model = max(model_files, key=lambda x: x.stat().st_mtime)
             filename = latest_model.name
-            print(f"Loading model: {filename}")
         
         try:
             model_path = save_dir / filename
             self.policy_net.load_state_dict(torch.load(model_path, weights_only=True))
+            self.target_net.load_state_dict(torch.load(model_path, weights_only=True))
             print(f"Successfully loaded weights from {filename}")
-        except FileNotFoundError:
-            print(f"No saved model found at {model_path}")
         except Exception as e:
             print(f"Error loading model: {e}")
 

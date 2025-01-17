@@ -19,10 +19,10 @@ class Agent(LearningAgent):
     The example training loop in main.py supports this interface as well by calling the respective callbacks.
     (Demonstration only - do not inherit)
     """
-    def __init__(self):
+    def __init__(self, weights=None):
         # Define reward mapping as class attribute
         self.reward_mapping = {
-            e.COIN_COLLECTED: 1,
+            e.COIN_COLLECTED: 5,
             e.INVALID_ACTION: -0.5,
             e.KILLED_OPPONENT: 5,
             e.CRATE_DESTROYED: 1,
@@ -30,6 +30,7 @@ class Agent(LearningAgent):
             e.GOT_KILLED: -5,
             e.WAITED: -0.1,
         }
+        self.q_learning = Model(weights_suffix=weights)
         self.setup()
         self.setup_training()
 
@@ -109,8 +110,7 @@ class Agent(LearningAgent):
         After episode ended (optional). Use this e.g. for model training and saving.
         """
         self.q_learning.optimize_incremental()
-        # Save model with timestamp
-        self.q_learning.save_weights(suffix=self.training_timestamp)
+        self.q_learning.save_weights()
 
     def _custom_events(self, old_state, new_state):
         """

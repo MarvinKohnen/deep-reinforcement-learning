@@ -27,7 +27,7 @@ class DummyAgent:
     def end_of_round(self, *args, **kwargs):
         pass
 
-def loop(env, agent, args, n_episodes=20000):
+def loop(env, agent, args, n_episodes=2000):
     # Create logger with path relative to our_agent directory
     logger = TrainingLogger(
         save_dir='scripts/our_agent/training_logs',
@@ -113,7 +113,7 @@ def provideAgent(passive: bool, weights: str = None):
         if weights == "fresh":
             agent.q_learning = Model(load=False)  # Don't load existing weights
         elif weights:  # if weights is a timestamp
-            agent.q_learning.load_weights(suffix=weights)
+            agent.q_learning.weights_suffix = weights  # Store the weights to load later
         return agent
 
 def main(argv=None):
