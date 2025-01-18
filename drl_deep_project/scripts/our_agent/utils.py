@@ -103,9 +103,9 @@ class TrainingLogger:
 
     def log_episode(self, episode, epsilon, loss, reward, episode_length):
         # Update model info if it's now available
-        if self.agent and self.agent.q_learning and self.agent.q_learning.policy_net:
+        if self.agent and self.agent.q_learning and self.agent.q_learning.policy_net_a:
             if not self.config['model']:  # Only update if empty
-                self.config['model'] = self.agent.q_learning.policy_net.get_architecture_info()
+                self.config['model'] = self.agent.q_learning.policy_net_a.get_architecture_info()
         
         # Adjust episode number to continue from previous training
         actual_episode = episode + self.episode_offset
