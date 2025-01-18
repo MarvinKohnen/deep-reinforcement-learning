@@ -125,18 +125,9 @@ class Model():
         self.steps += 1
         state = state.clone().detach().to(device).unsqueeze(0)
         
-        if eval_mode:
-            # Use average Q-values from both networks for action selection
-            self.policy_net_a.eval()
-            self.policy_net_b.eval()
-            with torch.no_grad():
-                q_values_a = self.policy_net_a(state)
-                q_values_b = self.policy_net_b(state)
-                average_q_values = (q_values_a + q_values_b) / 2
-                return average_q_values.max(1).indices
+        # Use eps_end during evaluation
+        eps_threshold = self.eps_end if eval_mode else self.get_epsilon()
         
-        # Epsilon-greedy during training
-        eps_threshold = self.get_epsilon()
         if random.random() > eps_threshold:
             self.policy_net_a.eval()
             self.policy_net_b.eval()
