@@ -5,7 +5,8 @@ import time
 from pathlib import Path
 from bomberman_rl.envs.settings import ROWS, COLS
 
-from .q_learning import Model
+from .q_learning import Model as SingleDQN
+from .double_q_learning import Model as DoubleDQN
 
 # Custom events
 SCORE_INCREASED = "SCORE_INCREASED"
@@ -19,7 +20,7 @@ class Agent(LearningAgent):
     The example training loop in main.py supports this interface as well by calling the respective callbacks.
     (Demonstration only - do not inherit)
     """
-    def __init__(self, weights=None):
+    def __init__(self, weights=None, use_double_dqn=False):
         # Define reward mapping as class attribute
         self.reward_mapping = {
             e.COIN_COLLECTED: 5,
@@ -30,7 +31,9 @@ class Agent(LearningAgent):
             e.GOT_KILLED: -5,
             e.WAITED: -0.1,
         }
-        self.q_learning = Model(weights_suffix=weights)
+        self.use_double_dqn = use_double_dqn
+        ModelClass = DoubleDQN if use_double_dqn else SingleDQN
+        self.q_learning = ModelClass(weights_suffix=weights)
         self.setup()
         self.setup_training()
 
@@ -38,7 +41,8 @@ class Agent(LearningAgent):
         """
         Before episode. Use this to setup action related state that is required to act on the environment.
         """
-        self.q_learning = Model()
+        ModelClass = DoubleDQN if self.use_double_dqn else SingleDQN
+        self.q_learning = ModelClass(weights_suffix=self.weights_suffix)
 
 
     def act(self, state, **kwargs) -> int:
@@ -126,131 +130,7 @@ class Agent(LearningAgent):
         Shape rewards using the reward mapping defined in __init__
         """
         return sum([self.reward_mapping.get(event, 0) for event in events])
-
-    def get_scope_representation(self, state):
-        # Get state information
-        self_pos = np.argwhere(state["self_pos"] == 1)[0]
-        walls = state["walls"]
-        crates = state["crates"]
-        coins = state["coins"]
-        opponents = state["opponents_pos"]
-
-        # Define representation values
-        wall_value = -1
-        crate_value = 2
-        coin_value = 10
-        self_value = 5
-        reachable_value = 1
-        opponent_value = -10
-        # Initialize reachable positions (position is marked as a 2) and danger map into one array
-        danger_map = self.get_danger_map(state)
-        scope_representation = danger_map
-        if not scope_representation[self_pos[0], self_pos[1]] < 0:
-            scope_representation[self_pos[0], self_pos[1]] = self_value
-
-        # Traverse the board and mark reachable positions using BFS
-        queue = [self_pos]
-        while queue:
-            pos = queue.pop(0)
-            for d in [(0, -1), (1, 0), (0, 1), (-1, 0)]:
-                # Get new position
-                new_pos = (pos[0] + d[0], pos[1] + d[1])
-                # Mark crates
-                if crates[new_pos[0], new_pos[1]] == 1:
-                    scope_representation[new_pos[0], new_pos[1]] = crate_value
-                if (
-                    coins[new_pos[0], new_pos[1]] == 1
-                    and scope_representation[new_pos[0], new_pos[1]] >= 0
-                ):
-                    scope_representation[new_pos[0], new_pos[1]] = coin_value
-                if (
-                    opponents[new_pos[0], new_pos[1]] == 1
-                    and scope_representation[new_pos[0], new_pos[1]] >= 0
-                ):
-                    scope_representation[new_pos[0], new_pos[1]] = opponent_value
-
-                # Mark reachable positions
-                if scope_representation[new_pos[0], new_pos[1]] == 0:
-                    scope_representation[new_pos[0], new_pos[1]] = reachable_value
-                    queue.append(new_pos)
-
-
-        # Create fixed window around agent 
-        window_size = 3  # This gives 7x7 (3 cells in each direction)
-        padded_scope = np.pad(
-            scope_representation,
-            window_size,
-            mode='constant',
-            constant_values=wall_value   # Use wall value to indicate out-of-bounds as padding
-        )
-
-        # For window_size = 3 and agent at position (x,y) in scope_representation:
-        agent_x, agent_y = self_pos[0] + window_size, self_pos[1] + window_size  # (x+3,y+3) because we added padding
-        window = padded_scope[
-            agent_x - window_size : agent_x + window_size + 1, # (x+3)-3 : (x+3)+3+1 -> [x:x+7]
-            agent_y - window_size : agent_y + window_size + 1  # (y+3)-3 : (y+3)+3+1 -> [y:y+7]
-        ]
-        return torch.tensor(window, device=device, dtype=torch.float32).flatten()
-
-    def get_danger_map(self, state):
-        bombs = -1 * state["bombs"]
-        walls = -1 * state["walls"]
-        explosions = -20 * (state["explosions"] // 10)
-        danger_map = bombs + walls + explosions
-
-        for i in range(danger_map.shape[0]):
-            for j in range(danger_map.shape[1]):
-                """
-                if (
-                    danger_map[i, j] == -2
-                    or danger_map[i, j] == -3
-                    or danger_map[i, j] == -4
-                ):"""
-                if -5 < danger_map[i, j] < 0:
-                    radius = abs(danger_map[i, j])
-
-                    # danger_map[i, j] = -20
-                    wall_hit_up = False
-                    wall_hit_right = False
-                    wall_hit_down = False
-                    wall_hit_left = False
-
-                    for k in range(1, radius):
-                        if (
-                            i + k < danger_map.shape[0]
-                            and danger_map[i + k, j] != -10
-                            and not wall_hit_up
-                        ):
-                            danger_map[i + k, j] = -20
-                        if i + k < danger_map.shape[0] and danger_map[i + k, j] == -10:
-                            wall_hit_up = True
-                        if (
-                            j + k < danger_map.shape[1]
-                            and danger_map[i, j + k] != -10
-                            and not wall_hit_right
-                        ):
-                            danger_map[i, j + k] = -20
-                        if j + k < danger_map.shape[1] and danger_map[i, j + k] == -10:
-                            wall_hit_right = True
-                        if (
-                            i - k >= 0
-                            and danger_map[i - k, j] != -10
-                            and not wall_hit_down
-                        ):
-                            danger_map[i - k, j] = -20
-                        if i - k >= 0 and danger_map[i - k, j] == -10:
-                            wall_hit_down = True
-                        if (
-                            j - k >= 0
-                            and danger_map[i, j - k] != -10
-                            and not wall_hit_left
-                        ):
-                            danger_map[i, j - k] = -20
-                        if j - k >= 0 and danger_map[i, j - k] == -10:
-                            wall_hit_left = True
-
-        return danger_map
-
+    
     def get_reward_mapping(self):
         """Return the reward mapping"""
         return self.reward_mapping

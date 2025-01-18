@@ -85,7 +85,7 @@ class Model():
         self.gamma = 0.99 # self.gamma is the discount factor
         self.eps_start = 0.9 # self.eps_start is the starting value of epsilon
         self.eps_end = 0.1 # self.eps_end is the final value of epsilon
-        self.eps_decay = 5000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
+        self.eps_decay = 60000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
         self.tau = 0.005 # self.tau is the update rate of the target network
         self.lr = 1e-4 # self.lr is the learning rate of the ``AdamW`` optimizer
         self.gradient_clipping = 100
@@ -94,54 +94,62 @@ class Model():
         self.load = load # load trained model or init from scratch
         self.n_actions = ActionSpace.n
         self.memory = ReplayMemory(10_000)
-        self.policy_net = None
-        self.weights_suffix = weights_suffix  # Store the source weights suffix
-        self.training_timestamp = time.strftime("%Y%m%d_%H%M%S")  # New timestamp for this run
+        self.policy_net_a = None
+        self.policy_net_b = None
+        self.target_net = None  # We still keep one target network
+        self.weights_suffix = weights_suffix
+        self.training_timestamp = time.strftime("%Y%m%d_%H%M%S")
 
     def lazy_init(self, observation):
         # only on first observation can we lazy initialize as we have no upfront information on the environment
         self.n_observations = len(observation)
-        self.policy_net = DQN(self.n_observations, self.n_actions).to(device)
-        self.target_net = DQN(self.n_observations, self.n_actions).to(device)  # Create target_net first
+        # Initialize two policy networks
+        self.policy_net_a = DQN(self.n_observations, self.n_actions).to(device)
+        self.policy_net_b = DQN(self.n_observations, self.n_actions).to(device)
+        self.target_net = DQN(self.n_observations, self.n_actions).to(device)
         
         if self.load:
             try:
-                self.load_weights(self.weights_suffix)  # Pass weights_suffix here
+                self.load_weights(self.weights_suffix)
             except FileNotFoundError:
                 pass
         
-        # Load target net after policy net is loaded
-        self.target_net.load_state_dict(self.policy_net.state_dict())
-        self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.lr, amsgrad=True)
+        self.target_net.load_state_dict(self.policy_net_a.state_dict())
+        # Create optimizers for both networks
+        self.optimizer_a = optim.AdamW(self.policy_net_a.parameters(), lr=self.lr, amsgrad=True)
+        self.optimizer_b = optim.AdamW(self.policy_net_b.parameters(), lr=self.lr, amsgrad=True)
 
     def act(self, state, eval_mode=False):
-        if self.policy_net is None:
+        if self.policy_net_a is None:
             self.lazy_init(state)
         self.steps += 1
         state = state.clone().detach().to(device).unsqueeze(0)
         
-        # Always act greedily during evaluation
         if eval_mode:
-            self.policy_net.eval()
+            # Use average Q-values from both networks for action selection
+            self.policy_net_a.eval()
+            self.policy_net_b.eval()
             with torch.no_grad():
-                return self.policy_net(state).max(1).indices
+                q_values_a = self.policy_net_a(state)
+                q_values_b = self.policy_net_b(state)
+                average_q_values = (q_values_a + q_values_b) / 2
+                return average_q_values.max(1).indices
         
         # Epsilon-greedy during training
-        eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * \
-            math.exp(-1. * self.steps / self.eps_decay)
-        sample = random.random()
-        if sample > eps_threshold:
-            self.policy_net.eval()
+        eps_threshold = self.get_epsilon()
+        if random.random() > eps_threshold:
+            self.policy_net_a.eval()
+            self.policy_net_b.eval()
             with torch.no_grad():
-                return self.policy_net(state).max(1).indices
+                q_values_a = self.policy_net_a(state)
+                q_values_b = self.policy_net_b(state)
+                average_q_values = (q_values_a + q_values_b) / 2
+                return average_q_values.max(1).indices
         else:
             return torch.tensor([ActionSpace.sample()], device=device, dtype=torch.long)
         
     def optimize_incremental(self):
-        """
-        One iteration of Q learning (Bellman optimality equation for Q values) on a random batch of past experience
-        """
-        self.policy_net.train()
+        """Double Q-learning optimization step"""
         transitions = self.memory.sample(self.batch_size)
         # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
         # detailed explanation). This converts batch-array of Transitions
@@ -158,53 +166,61 @@ class Model():
         action_batch = torch.stack(batch.action).to(device)
         reward_batch = torch.stack(batch.reward).to(device).squeeze(1)
 
-        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-        # columns of actions taken. These are the actions which would've been taken
-        # for each batch state according to policy_net
-        state_action_values = self.policy_net(state_batch).gather(1, action_batch)
+        # Randomly choose which network to update
+        update_a = random.random() < 0.5
+        policy_net = self.policy_net_a if update_a else self.policy_net_b
+        other_net = self.policy_net_b if update_a else self.policy_net_a
+        optimizer = self.optimizer_a if update_a else self.optimizer_b
 
-        # Compute V(s_{t+1}) for all next states.
-        # Expected values of actions for non_final_next_states are computed based
-        # on the "older" target_net; selecting their best reward with max(1).values
-        # This is merged based on the mask, such that we'll have either the expected
-        # state value or 0 in case the state was final.
+        # Get current Q values
+        state_action_values = policy_net(state_batch).gather(1, action_batch)
+
+        # Compute next state values using other network for action selection
         next_state_values = torch.zeros(state_batch.shape[0], device=device)
-        with torch.no_grad():
-            next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1).values # max Q values of next state
+        if len(non_final_next_states) > 0:
+            with torch.no_grad():
+                # Use other network to select actions
+                next_actions = other_net(non_final_next_states).max(1).indices.unsqueeze(1)
+                # Use target network to evaluate those actions
+                next_state_values[non_final_mask] = self.target_net(non_final_next_states).gather(1, next_actions).squeeze()
 
-        # Compute the optimal Q values
-        expected_state_action_values = (next_state_values * self.gamma) + reward_batch # Bellman optimality equation
+        # Compute expected Q values
+        expected_state_action_values = (next_state_values * self.gamma) + reward_batch
 
         # Compute Huber loss
         criterion = nn.SmoothL1Loss()
         loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
 
-        # Optimize the model
-        self.optimizer.zero_grad()
+        optimizer.zero_grad()
         loss.backward()
-        # In-place gradient clipping
-        torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), self.gradient_clipping)
-        self.optimizer.step()
+        torch.nn.utils.clip_grad_value_(policy_net.parameters(), self.gradient_clipping)
+        optimizer.step()
 
         self.update_target_net()
         return loss.item()
 
     def update_target_net(self):
         """
-        Soft update of the target network's weights
-        θ′ ← τ θ + (1 −τ )θ′
+        Soft update of the target network's weights using average of both policy networks
+        θ′ ← τ (θa + θb)/2 + (1 −τ )θ′
         """
         target_net_state_dict = self.target_net.state_dict()
-        policy_net_state_dict = self.policy_net.state_dict()
-        for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key] * self.tau + target_net_state_dict[key] * (1 - self.tau)
+        policy_net_a_dict = self.policy_net_a.state_dict()
+        policy_net_b_dict = self.policy_net_b.state_dict()
+        
+        for key in target_net_state_dict:
+            # Average the weights of both policy networks
+            avg_weight = (policy_net_a_dict[key] + policy_net_b_dict[key]) / 2
+            # Soft update using the average
+            target_net_state_dict[key] = avg_weight * self.tau + target_net_state_dict[key] * (1 - self.tau)
+        
         self.target_net.load_state_dict(target_net_state_dict)
 
     def experience(self, old_state, action, new_state, reward):
         """
         Save new experience
         """
-        if self.policy_net is None:
+        if self.policy_net_a is None:
             self.lazy_init(old_state)
         
         # Convert numpy arrays to tensors
@@ -218,33 +234,40 @@ class Model():
             torch.tensor([reward], device=device, dtype=torch.float32))
 
     def save_weights(self):
-        """Save model with new timestamp"""
+        """Save both networks"""
         save_dir = Path("scripts/our_agent/models")
         save_dir.mkdir(exist_ok=True)
-        filename = f"dqn_{self.training_timestamp}.pt"
-        torch.save(self.policy_net.state_dict(), save_dir / filename)
-        print(f"Saved model as: {filename}")
+        filename_a = f"dqn_a_{self.training_timestamp}.pt"
+        filename_b = f"dqn_b_{self.training_timestamp}.pt"
+        torch.save(self.policy_net_a.state_dict(), save_dir / filename_a)
+        torch.save(self.policy_net_b.state_dict(), save_dir / filename_b)
 
     def load_weights(self, suffix=None):
-        """Load model weights from a specific version or most recent"""
+        """Load both networks"""
         save_dir = Path("scripts/our_agent/models")
         
         if suffix:
-            filename = f"dqn_{suffix}.pt"
+            filename_a = f"dqn_a_{suffix}.pt"
+            filename_b = f"dqn_b_{suffix}.pt"
         else:
-            # Try to load the most recent version
-            model_files = list(save_dir.glob("dqn_*.pt"))
+            model_files = list(save_dir.glob("dqn_a_*.pt"))
             if not model_files:
                 print("No saved model found. Starting with fresh weights.")
                 return
             latest_model = max(model_files, key=lambda x: x.stat().st_mtime)
-            filename = latest_model.name
+            filename_a = latest_model.name
+            filename_b = filename_a.replace('dqn_a_', 'dqn_b_')
         
         try:
-            model_path = save_dir / filename
-            self.policy_net.load_state_dict(torch.load(model_path, weights_only=True))
-            self.target_net.load_state_dict(torch.load(model_path, weights_only=True))
-            print(f"Successfully loaded weights from {filename}")
+            self.policy_net_a.load_state_dict(torch.load(save_dir / filename_a, weights_only=True))
+            self.policy_net_b.load_state_dict(torch.load(save_dir / filename_b, weights_only=True))
+            # Initialize target network with average of both networks
+            target_state_dict = self.target_net.state_dict()
+            for key in target_state_dict:
+                target_state_dict[key] = (self.policy_net_a.state_dict()[key] + 
+                                        self.policy_net_b.state_dict()[key]) / 2
+            self.target_net.load_state_dict(target_state_dict)
+            print(f"Successfully loaded weights from {filename_a} and {filename_b}")
         except Exception as e:
             print(f"Error loading model: {e}")
 
@@ -268,6 +291,6 @@ class Model():
 
     def get_model_info(self):
         """Return model architecture information"""
-        if self.policy_net is None:
+        if self.policy_net_a is None:
             return {}
-        return self.policy_net.get_architecture_info()
+        return self.policy_net_a.get_architecture_info()

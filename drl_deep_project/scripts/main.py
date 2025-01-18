@@ -27,7 +27,7 @@ class DummyAgent:
     def end_of_round(self, *args, **kwargs):
         pass
 
-def loop(env, agent, args, n_episodes=2000):
+def loop(env, agent, args, n_episodes=20000):
     # Create logger with path relative to our_agent directory
     logger = TrainingLogger(
         save_dir='scripts/our_agent/training_logs',
@@ -105,11 +105,11 @@ def loop(env, agent, args, n_episodes=2000):
     print(f"Training ended at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"That took {time.time() - start_time:.2f} seconds")
 
-def provideAgent(passive: bool, weights: str = None):
+def provideAgent(passive: bool, weights: str = None, use_double_dqn: bool = False):
     if passive:
         return DummyAgent()
     else:
-        agent = Agent()
+        agent = Agent(use_double_dqn=use_double_dqn)
         if weights == "fresh":
             agent.q_learning = Model(load=False)  # Don't load existing weights
         elif weights:  # if weights is a timestamp
@@ -129,7 +129,7 @@ def main(argv=None):
     if args.video:
         env = RecordVideo(env, video_folder=args.video, name_prefix=args.match_name)
 
-    agent = provideAgent(passive=args.passive, weights=args.weights)
+    agent = provideAgent(passive=args.passive, weights=args.weights, use_double_dqn=args.use_double_dqn)
     if agent is None and not args.passive and not args.user_play:
         raise AssertionError("Either provide an agent or run in passive mode by providing the command line argument --passive")
     if args.train:
