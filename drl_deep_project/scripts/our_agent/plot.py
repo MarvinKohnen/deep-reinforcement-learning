@@ -17,7 +17,7 @@ def plot_training():
 	fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(20, 12))  # Changed to 4 rows, 1 column
 
 	# Calculate rolling averages with dynamic window size
-	max_window = 1000
+	max_window = 100
 
 	def rolling_average(data):
 		smoothed = []
@@ -82,5 +82,6 @@ def plot_training():
 	#plt.show()
 	#plt.close()
 
-parse_log("./training_logs/training_stats.json")
+#insert run result to be used
+parse_log("./training_logs/model_*/run_*/training_stats.json")
 plot_training()
