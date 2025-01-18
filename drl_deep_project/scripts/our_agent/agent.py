@@ -42,7 +42,7 @@ class Agent(LearningAgent):
         Before episode. Use this to setup action related state that is required to act on the environment.
         """
         ModelClass = DoubleDQN if self.use_double_dqn else SingleDQN
-        self.q_learning = ModelClass(weights_suffix=self.weights_suffix)
+        self.q_learning = ModelClass()
 
 
     def act(self, state, **kwargs) -> int:
@@ -130,7 +130,6 @@ class Agent(LearningAgent):
         Shape rewards using the reward mapping defined in __init__
         """
         return sum([self.reward_mapping.get(event, 0) for event in events])
-    
     def get_reward_mapping(self):
         """Return the reward mapping"""
         return self.reward_mapping
