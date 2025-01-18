@@ -27,11 +27,13 @@ class DummyAgent:
     def end_of_round(self, *args, **kwargs):
         pass
 
-def loop(env, agent, args, n_episodes=50000):
+def loop(env, agent, args, n_episodes=20000):
     # Create logger with path relative to our_agent directory
     logger = TrainingLogger(
         save_dir='scripts/our_agent/training_logs',
-        fresh=(args.weights == "fresh")
+        fresh=(args.weights == "fresh"),
+        agent=agent,
+        scenario=args.scenario
     ) if args.train else None
     
     if args.train:
@@ -54,7 +56,7 @@ def loop(env, agent, args, n_episodes=50000):
                     time.sleep(0.1)  # wait for user action or quit
                     action, quit = env.unwrapped.get_user_action()
             else:
-                action, quit = agent.act(state), env.unwrapped.get_user_quit()
+                action, quit = agent.act(state, train=args.train), env.unwrapped.get_user_quit()
 
             if quit:
                 env.close()
@@ -103,15 +105,15 @@ def loop(env, agent, args, n_episodes=50000):
     print(f"Training ended at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"That took {time.time() - start_time:.2f} seconds")
 
-def provideAgent(passive: bool, weights: str = None):
+def provideAgent(passive: bool, weights: str = None, use_double_dqn: bool = False):
     if passive:
         return DummyAgent()
     else:
-        agent = Agent()
+        agent = Agent(use_double_dqn=use_double_dqn)
         if weights == "fresh":
             agent.q_learning = Model(load=False)  # Don't load existing weights
         elif weights:  # if weights is a timestamp
-            agent.q_learning.load_weights(suffix=weights)
+            agent.q_learning.weights_suffix = weights  # Store the weights to load later
         return agent
 
 def main(argv=None):
@@ -121,13 +123,13 @@ def main(argv=None):
     # Notice that you can not use wrappers in the tournament!
     # However, you might wanna use this example interface to kickstart your experiments
     # env = ScoreRewardWrapper(env)
-    # env = TimePenaltyRewardWrapper(env, penalty=.1)
+    # env = TimePenaltyRewardWrapper(env, penalty=.5)
     #env = RestrictedKeysWrapper(env, keys=["self_pos"])
     #env = FlattenWrapper(env)
     if args.video:
         env = RecordVideo(env, video_folder=args.video, name_prefix=args.match_name)
 
-    agent = provideAgent(passive=args.passive, weights=args.weights)
+    agent = provideAgent(passive=args.passive, weights=args.weights, use_double_dqn=args.use_double_dqn)
     if agent is None and not args.passive and not args.user_play:
         raise AssertionError("Either provide an agent or run in passive mode by providing the command line argument --passive")
     if args.train:

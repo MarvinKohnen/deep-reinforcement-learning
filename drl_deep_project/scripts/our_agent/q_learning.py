@@ -4,11 +4,13 @@ import math
 import random
 from pathlib import Path
 from collections import namedtuple, deque
+import time
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import numpy as np
 
 from bomberman_rl import ActionSpace
 
@@ -23,20 +25,113 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
 
-class ReplayMemory(object):
-
+class SumTree:
+    """
+    A binary tree data structure where the parent's value is the sum of its children
+    """
     def __init__(self, capacity):
-        self.memory = deque([], maxlen=capacity)
+        self.capacity = capacity
+        self.tree = np.zeros(2 * capacity - 1)  # Array to store the tree
+        self.data = np.zeros(capacity, dtype=object)  # Array to store the data/transitions
+        self.write = 0  # Current writing position
+        self.n_entries = 0  # Number of entries in tree
+
+    def _propagate(self, idx, change):
+        """Propagate the priority update up through the tree"""
+        parent = (idx - 1) // 2
+        self.tree[parent] += change
+        if parent != 0:
+            self._propagate(parent, change)
+
+    def _retrieve(self, idx, s):
+        """Find the index of the leaf with a given priority value"""
+        left = 2 * idx + 1
+        right = left + 1
+
+        if left >= len(self.tree):
+            return idx
+
+        if s <= self.tree[left]:
+            return self._retrieve(left, s)
+        else:
+            return self._retrieve(right, s - self.tree[left])
+
+    def total(self):
+        """Return the total priority"""
+        return self.tree[0]
+
+    def add(self, priority, data):
+        """Add new data to the tree"""
+        idx = self.write + self.capacity - 1
+        self.data[self.write] = data
+        self.update(idx, priority)
+        self.write = (self.write + 1) % self.capacity
+        self.n_entries = min(self.n_entries + 1, self.capacity)
+
+    def update(self, idx, priority):
+        """Update the priority of a leaf"""
+        change = priority - self.tree[idx]
+        self.tree[idx] = priority
+        self._propagate(idx, change)
+
+    def get(self, s):
+        """Get a transition based on a priority value"""
+        idx = self._retrieve(0, s)
+        dataIdx = idx - self.capacity + 1
+        return (idx, self.tree[idx], self.data[dataIdx])
+
+
+class ReplayMemory(object):
+    def __init__(self, capacity):
+        self.tree = SumTree(capacity)
+        self.capacity = capacity
+        self.eps = 0.01  # Small constant to ensure non-zero priority
+        self.alpha = 0.6  # Priority exponent
+        self.beta = 0.4  # Initial importance sampling weight
+        self.beta_increment = 0.001  # Beta increment per sampling
+        self.max_priority = 1.0  # Maximum priority for new transitions
 
     def push(self, *args):
-        """Save a transition"""
-        self.memory.append(Transition(*args))
+        """Save a transition with maximum priority"""
+        transition = Transition(*args)
+        self.tree.add(self.max_priority, transition)
 
     def sample(self, batch_size):
-        return random.sample(self.memory, min(batch_size, len(self.memory)))
+        """Sample a batch of transitions based on their priorities"""
+        batch = []
+        indices = []
+        priorities = []
+        segment = self.tree.total() / batch_size
+
+        # Increase beta for importance sampling
+        self.beta = min(1.0, self.beta + self.beta_increment)
+
+        for i in range(batch_size):
+            a = segment * i
+            b = segment * (i + 1)
+            s = random.uniform(a, b)
+            
+            idx, priority, data = self.tree.get(s)
+            indices.append(idx)
+            priorities.append(priority)
+            batch.append(data)
+
+        # Calculate importance sampling weights
+        sampling_probabilities = np.array(priorities) / self.tree.total()
+        is_weights = np.power(self.tree.n_entries * sampling_probabilities, -self.beta)
+        is_weights /= is_weights.max()  # Normalize weights
+
+        return batch, indices, torch.FloatTensor(is_weights).to(device)
+
+    def update_priorities(self, indices, td_errors):
+        """Update priorities based on TD errors"""
+        for idx, td_error in zip(indices, td_errors):
+            priority = (abs(td_error.item()) + self.eps) ** self.alpha
+            self.tree.update(idx, priority)
+            self.max_priority = max(self.max_priority, priority)
 
     def __len__(self):
-        return len(self.memory)
+        return self.tree.n_entries
 
 class DQN(nn.Module):
     """ State approximation via Multi-Layer Perceptron """
@@ -54,6 +149,17 @@ class DQN(nn.Module):
         x = F.relu(self.layer2(x))
         return self.layer3(x)
     
+    def get_architecture_info(self):
+        """Return the model's architecture information"""
+        return {
+            'type': self.__class__.__name__,
+            'input_size': self.layer1.in_features,
+            'hidden_layers': [
+                self.layer1.out_features,
+                self.layer2.out_features
+            ],
+            'output_size': self.layer3.out_features
+        }
 
 class Tabular(nn.Module):
     """ State approximation via Multi-Layer Perceptron """
@@ -68,12 +174,12 @@ class Tabular(nn.Module):
         return self.layer1(x)
     
 class Model():
-    def __init__(self, load=True, path=Path(__file__).parent / "model.pt"):
+    def __init__(self, load=True, path=Path(__file__).parent / "model.pt", weights_suffix=None):
         self.batch_size = 128 # self.batch_size is the number of transitions sampled from the replay buffer
         self.gamma = 0.99 # self.gamma is the discount factor
-        self.eps_start = 1 # self.eps_start is the starting value of epsilon
-        self.eps_end = 0.05 # self.eps_end is the final value of epsilon
-        self.eps_decay = 100_000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
+        self.eps_start = 0.9 # self.eps_start is the starting value of epsilon
+        self.eps_end = 0.1 # self.eps_end is the final value of epsilon
+        self.eps_decay = 15000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
         self.tau = 0.005 # self.tau is the update rate of the target network
         self.lr = 1e-4 # self.lr is the learning rate of the ``AdamW`` optimizer
         self.gradient_clipping = 100
@@ -83,47 +189,51 @@ class Model():
         self.n_actions = ActionSpace.n
         self.memory = ReplayMemory(10_000)
         self.policy_net = None
+        self.weights_suffix = weights_suffix  # Store the source weights suffix
+        self.training_timestamp = time.strftime("%Y%m%d_%H%M%S")  # New timestamp for this run
 
     def lazy_init(self, observation):
         # only on first observation can we lazy initialize as we have no upfront information on the environment
         self.n_observations = len(observation)
         self.policy_net = DQN(self.n_observations, self.n_actions).to(device)
+        self.target_net = DQN(self.n_observations, self.n_actions).to(device)  # Create target_net first
+        
         if self.load:
             try:
-                self.load_weights()
+                self.load_weights(self.weights_suffix)  # Pass weights_suffix here
             except FileNotFoundError:
                 pass
-        self.target_net = DQN(self.n_observations, self.n_actions).to(device)
+        
+        # Load target net after policy net is loaded
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.lr, amsgrad=True)
 
-    def act(self, state):
+    def act(self, state, eval_mode=False):
         if self.policy_net is None:
             self.lazy_init(state)
         self.steps += 1
         state = state.clone().detach().to(device).unsqueeze(0)
+        
+        # Always act greedily during evaluation
+        if eval_mode:
+            self.policy_net.eval()
+            with torch.no_grad():
+                return self.policy_net(state).max(1).indices
+        
+        # Epsilon-greedy during training
         eps_threshold = self.eps_end + (self.eps_start - self.eps_end) * \
             math.exp(-1. * self.steps / self.eps_decay)
         sample = random.random()
         if sample > eps_threshold:
             self.policy_net.eval()
             with torch.no_grad():
-                # t.max(1) will return the largest column value of each row.
-                # second column on max result is index of where max element was
-                # found, so we pick action with the larger expected reward.
                 return self.policy_net(state).max(1).indices
         else:
             return torch.tensor([ActionSpace.sample()], device=device, dtype=torch.long)
         
     def optimize_incremental(self):
-        """
-        One iteration of Q learning (Bellman optimality equation for Q values) on a random batch of past experience
-        """
-        self.policy_net.train()
-        transitions = self.memory.sample(self.batch_size)
-        # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-        # detailed explanation). This converts batch-array of Transitions
-        # to Transition of batch-arrays.
+        """One iteration of Q learning with prioritized experience replay"""
+        transitions, indices, is_weights = self.memory.sample(self.batch_size)
         batch = Transition(*zip(*transitions))
 
         # Compute a mask of non-final states and concatenate the batch elements
@@ -136,9 +246,7 @@ class Model():
         action_batch = torch.stack(batch.action).to(device)
         reward_batch = torch.stack(batch.reward).to(device).squeeze(1)
 
-        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-        # columns of actions taken. These are the actions which would've been taken
-        # for each batch state according to policy_net
+        # Compute TD errors for priority updating
         state_action_values = self.policy_net(state_batch).gather(1, action_batch)
 
         # Compute V(s_{t+1}) for all next states.
@@ -148,21 +256,25 @@ class Model():
         # state value or 0 in case the state was final.
         next_state_values = torch.zeros(state_batch.shape[0], device=device)
         with torch.no_grad():
-            next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1).values # max Q values of next state
+            next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1).values
+        expected_state_action_values = (next_state_values * self.gamma) + reward_batch
 
-        # Compute the optimal Q values
-        expected_state_action_values = (next_state_values * self.gamma) + reward_batch # Bellman optimality equation
+        # Calculate TD errors
+        td_errors = expected_state_action_values.unsqueeze(1) - state_action_values
 
-        # Compute Huber loss
-        criterion = nn.SmoothL1Loss()
+        # Apply importance sampling weights to the loss
+        criterion = nn.SmoothL1Loss(reduction='none')
         loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
+        loss = (loss * is_weights.unsqueeze(1)).mean()
 
         # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
-        # In-place gradient clipping
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), self.gradient_clipping)
         self.optimizer.step()
+
+        # Update priorities in memory
+        self.memory.update_priorities(indices, td_errors)
 
         self.update_target_net()
         return loss.item()
@@ -184,33 +296,25 @@ class Model():
         """
         if self.policy_net is None:
             self.lazy_init(old_state)
+        
         self.memory.push(
-            old_state,
+            torch.tensor(old_state, device=device, dtype=torch.float32),
             torch.tensor([action], device=device, dtype=torch.int64),
-            None if new_state is None else new_state,
+            None if new_state is None else torch.tensor(new_state, device=device, dtype=torch.float32),
             torch.tensor([reward], device=device, dtype=torch.float32))
 
-    def save_weights(self, suffix=None):
-        """Save model weights with optional timestamp suffix"""
+    def save_weights(self):
+        """Save model with new timestamp"""
         save_dir = Path("scripts/our_agent/models")
         save_dir.mkdir(exist_ok=True)
-        
-        if suffix:
-            filename = f"dqn_{suffix}.pt"
-        else:
-            filename = "dqn.pt"
-        
+        filename = f"dqn_{self.training_timestamp}.pt"
         torch.save(self.policy_net.state_dict(), save_dir / filename)
 
     def load_weights(self, suffix=None):
-        """
-        Load model weights. If suffix is provided, load that specific version.
-        Otherwise, try to load the most recent version.
-        """
+        """Load model weights from a specific version or most recent"""
         save_dir = Path("scripts/our_agent/models")
         
         if suffix:
-            # Load specific version
             filename = f"dqn_{suffix}.pt"
         else:
             # Try to load the most recent version
@@ -218,21 +322,42 @@ class Model():
             if not model_files:
                 print("No saved model found. Starting with fresh weights.")
                 return
-            
-            # Sort by timestamp (newest first)
             latest_model = max(model_files, key=lambda x: x.stat().st_mtime)
             filename = latest_model.name
-            print(f"Loading model: {filename}")
         
         try:
             model_path = save_dir / filename
-            self.policy_net.load_state_dict(torch.load(model_path, weights_only=True, map_location="cpu"))
+            self.policy_net.load_state_dict(torch.load(model_path, weights_only=True))
+            self.target_net.load_state_dict(torch.load(model_path, weights_only=True))
             print(f"Successfully loaded weights from {filename}")
-        except FileNotFoundError:
-            print(f"No saved model found at {model_path}")
         except Exception as e:
             print(f"Error loading model: {e}")
 
     def get_epsilon(self):
         return self.eps_end + (self.eps_start - self.eps_end) * \
             math.exp(-1. * self.steps / self.eps_decay)
+
+    def get_hyperparameters(self):
+        """Return the model's hyperparameters"""
+        return {
+            'batch_size': self.batch_size,
+            'gamma': self.gamma,
+            'eps_start': self.eps_start,
+            'eps_end': self.eps_end,
+            'eps_decay': self.eps_decay,
+            'tau': self.tau,
+            'lr': self.lr,
+            'gradient_clipping': self.gradient_clipping,
+            'memory_size': self.memory.capacity,
+            # PER parameters
+            'per_epsilon': self.memory.eps,
+            'per_alpha': self.memory.alpha,
+            'per_beta': self.memory.beta,
+            'per_beta_increment': self.memory.beta_increment
+        }
+
+    def get_model_info(self):
+        """Return model architecture information"""
+        if self.policy_net is None:
+            return {}
+        return self.policy_net.get_architecture_info()
