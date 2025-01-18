@@ -1,0 +1,66 @@
+{
+    "config": {
+        "model": {
+            "type": "DQN",
+            "input_size": 32,
+            "hidden_layers": [
+                64,
+                64
+            ],
+            "output_size": 6
+        },
+        "hyperparameters": {
+            "batch_size": 128,
+            "gamma": 0.99,
+            "eps_start": 0.9,
+            "eps_end": 0.1,
+            "eps_decay": 15000,
+            "tau": 0.005,
+            "lr": 0.0001,
+            "gradient_clipping": 100,
+            "memory_size": 10000,
+            "per_epsilon": 0.01,
+            "per_alpha": 0.6,
+            "per_beta": 0.4,
+            "per_beta_increment": 0.001
+        },
+        "reward_mapping": {
+            "COIN_COLLECTED": 5,
+            "INVALID_ACTION": -0.5,
+            "KILLED_OPPONENT": 5,
+            "CRATE_DESTROYED": 1,
+            "COIN_FOUND": 1,
+            "GOT_KILLED": -5,
+            "WAITED": -0.1
+        },
+        "env": {
+            "scenario": "classic",
+            "board_size": {
+                "rows": 17,
+                "cols": 17
+            }
+        },
+        "dqn_type": "single"
+    },
+    "rewards": [
+        -4.6,
+        -4.6
+    ],
+    "losses": [
+        0.0426,
+        0.133
+    ],
+    "eps_values": [
+        0.8996,
+        0.8987
+    ],
+    "steps": [
+        0,
+        1
+    ],
+    "episode_lengths": [
+        8,
+        16
+    ],
+    "dqn_type": "single"
+}
