@@ -1,0 +1,1 @@
+results curriculum-coin, coin_collected: 1, invalid_action: -0.5, killed_opponent: 5, crate_destroyed: 0.3, got_killed: -7, waited: -0.1, bomb_dropped: -0.2, epsilon start 1.0, eps_end: 0.1, eps_decay: 15000
