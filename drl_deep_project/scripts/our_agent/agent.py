@@ -28,7 +28,7 @@ class Agent(LearningAgent):
             e.KILLED_OPPONENT: 10,
             e.CRATE_DESTROYED: 0.5,
             e.GOT_KILLED: -14,
-            e.WAITED: -0.3,
+            e.WAITED: -0.2,
             e.BOMB_DROPPED: -0.2,
             e.MOVED_DOWN: -0.1,
             e.MOVED_LEFT: -0.1,

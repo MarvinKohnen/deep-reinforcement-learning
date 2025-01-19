@@ -179,7 +179,7 @@ class Model():
         self.gamma = 0.99 # self.gamma is the discount factor
         self.eps_start = 1.0 # self.eps_start is the starting value of epsilon
         self.eps_end = 0.1 # self.eps_end is the final value of epsilon
-        self.eps_decay = 15000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
+        self.eps_decay = 60000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
         self.tau = 0.005 # self.tau is the update rate of the target network
         self.lr = 1e-4 # self.lr is the learning rate of the ``AdamW`` optimizer
         self.gradient_clipping = 100
