@@ -24,12 +24,7 @@ git add scripts/our_agent/models scripts/our_agent/training_logs
 git commit -m "Update model and training logs"
 git push origin results
 
-<<<<<<< HEAD
 # Switch back to marvin-private branch
 git checkout marvin-private
-=======
-# Switch back to julius-private branch
-git checkout julius-private
->>>>>>> julius-private
 
 echo "Model and training logs updated on results branch with README in $latest_dir"

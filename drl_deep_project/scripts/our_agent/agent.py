@@ -23,13 +23,13 @@ class Agent(LearningAgent):
     def __init__(self, weights=None, use_double_dqn=False):
         # Define reward mapping as class attribute
         self.reward_mapping = {
-            e.COIN_COLLECTED: 5,
+            e.COIN_COLLECTED: 1,
             e.INVALID_ACTION: -0.5,
             e.KILLED_OPPONENT: 5,
-            e.CRATE_DESTROYED: 1,
-            e.COIN_FOUND: 1,
-            e.GOT_KILLED: -5,
+            e.CRATE_DESTROYED: 0.3,
+            e.GOT_KILLED: -7,
             e.WAITED: -0.1,
+            e.BOMB_DROPPED: -0.2,
         }
         self.use_double_dqn = use_double_dqn
         ModelClass = DoubleDQN if use_double_dqn else SingleDQN
