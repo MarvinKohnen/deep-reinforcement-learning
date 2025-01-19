@@ -23,7 +23,7 @@ class Agent(LearningAgent):
     def __init__(self, weights=None, use_double_dqn=False):
         # Define reward mapping as class attribute
         self.reward_mapping = {
-            e.COIN_COLLECTED: 5,
+            e.COIN_COLLECTED: 1,
             e.INVALID_ACTION: -0.5,
             e.KILLED_OPPONENT: 5,
             e.CRATE_DESTROYED: 1,
