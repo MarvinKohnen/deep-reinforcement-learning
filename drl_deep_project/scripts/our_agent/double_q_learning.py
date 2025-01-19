@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import numpy as np
 
 from bomberman_rl import ActionSpace
 
@@ -24,20 +25,115 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
 
+class SumTree:
+    """
+    A binary tree data structure where the parent's value is the sum of its children
+    """
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.tree = np.zeros(2 * capacity - 1)  # Array to store the tree
+        self.data = np.zeros(capacity, dtype=object)  # Array to store the data/transitions
+        self.write = 0  # Current writing position
+        self.n_entries = 0  # Number of entries in tree
+
+    def _propagate(self, idx, change):
+        """Propagate the priority update up through the tree"""
+        parent = (idx - 1) // 2
+        self.tree[parent] += change
+        if parent != 0:
+            self._propagate(parent, change)
+
+    def _retrieve(self, idx, s):
+        """Find the index of the leaf with a given priority value"""
+        left = 2 * idx + 1
+        right = left + 1
+
+        if left >= len(self.tree):
+            return idx
+
+        if s <= self.tree[left]:
+            return self._retrieve(left, s)
+        else:
+            return self._retrieve(right, s - self.tree[left])
+
+    def total(self):
+        """Return the total priority"""
+        return self.tree[0]
+
+    def add(self, priority, data):
+        """Add new data to the tree"""
+        idx = self.write + self.capacity - 1
+        self.data[self.write] = data
+        self.update(idx, priority)
+        self.write = (self.write + 1) % self.capacity
+        self.n_entries = min(self.n_entries + 1, self.capacity)
+
+    def update(self, idx, priority):
+        """Update the priority of a leaf"""
+        change = priority - self.tree[idx]
+        self.tree[idx] = priority
+        self._propagate(idx, change)
+
+    def get(self, s):
+        """Get a transition based on a priority value"""
+        idx = self._retrieve(0, s)
+        dataIdx = idx - self.capacity + 1
+        return (idx, self.tree[idx], self.data[dataIdx])
+
+
 class ReplayMemory(object):
 
     def __init__(self, capacity):
-        self.memory = deque([], maxlen=capacity)
+        self.tree = SumTree(capacity)
+        self.capacity = capacity
+        self.eps = 0.01  # Small constant to ensure non-zero priority
+        self.alpha = 0.6  # Priority exponent
+        self.beta = 0.4  # Initial importance sampling weight
+        self.beta_increment = 0.001  # Beta increment per sampling
+        self.max_priority = 1.0  # Maximum priority for new transitions
 
     def push(self, *args):
-        """Save a transition"""
-        self.memory.append(Transition(*args))
+        """Save a transition with maximum priority"""
+        transition = Transition(*args)
+        self.tree.add(self.max_priority, transition)
 
     def sample(self, batch_size):
-        return random.sample(self.memory, min(batch_size, len(self.memory)))
+        """Sample a batch of transitions based on their priorities"""
+        batch = []
+        indices = []
+        priorities = []
+        segment = self.tree.total() / batch_size
+
+        # Increase beta for importance sampling
+        self.beta = min(1.0, self.beta + self.beta_increment)
+
+        for i in range(batch_size):
+            a = segment * i
+            b = segment * (i + 1)
+            s = random.uniform(a, b)
+            
+            idx, priority, data = self.tree.get(s)
+            indices.append(idx)
+            priorities.append(priority)
+            batch.append(data)
+
+        # Calculate importance sampling weights
+        sampling_probabilities = np.array(priorities) / self.tree.total()
+        is_weights = np.power(self.tree.n_entries * sampling_probabilities, -self.beta)
+        is_weights /= is_weights.max()  # Normalize weights
+
+        return batch, indices, torch.FloatTensor(is_weights).to(device)
+
+    def update_priorities(self, indices, td_errors):
+        """Update priorities based on TD errors"""
+        for idx, td_error in zip(indices, td_errors):
+            priority = (abs(td_error.item()) + self.eps) ** self.alpha
+            self.tree.update(idx, priority)
+            self.max_priority = max(self.max_priority, priority)
 
     def __len__(self):
-        return len(self.memory)
+        return self.tree.n_entries
+
 
 class DQN(nn.Module):
     """ State approximation via Multi-Layer Perceptron """
@@ -83,9 +179,9 @@ class Model():
     def __init__(self, load=True, path=Path(__file__).parent / "model.pt", weights_suffix=None):
         self.batch_size = 128 # self.batch_size is the number of transitions sampled from the replay buffer
         self.gamma = 0.99 # self.gamma is the discount factor
-        self.eps_start = 0.1 # self.eps_start is the starting value of epsilon
+        self.eps_start = 0.9 # self.eps_start is the starting value of epsilon
         self.eps_end = 0.1 # self.eps_end is the final value of epsilon
-        self.eps_decay = 15000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
+        self.eps_decay = 50000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
         self.tau = 0.005 # self.tau is the update rate of the target network
         self.lr = 1e-4 # self.lr is the learning rate of the ``AdamW`` optimizer
         self.gradient_clipping = 100
@@ -125,18 +221,9 @@ class Model():
         self.steps += 1
         state = state.clone().detach().to(device).unsqueeze(0)
         
-        if eval_mode:
-            # Use average Q-values from both networks for action selection
-            self.policy_net_a.eval()
-            self.policy_net_b.eval()
-            with torch.no_grad():
-                q_values_a = self.policy_net_a(state)
-                q_values_b = self.policy_net_b(state)
-                average_q_values = (q_values_a + q_values_b) / 2
-                return average_q_values.max(1).indices
+        # Use eps_end during evaluation
+        eps_threshold = self.eps_end if eval_mode else self.get_epsilon()
         
-        # Epsilon-greedy during training
-        eps_threshold = self.get_epsilon()
         if random.random() > eps_threshold:
             self.policy_net_a.eval()
             self.policy_net_b.eval()
@@ -149,11 +236,8 @@ class Model():
             return torch.tensor([ActionSpace.sample()], device=device, dtype=torch.long)
         
     def optimize_incremental(self):
-        """Double Q-learning optimization step"""
-        transitions = self.memory.sample(self.batch_size)
-        # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-        # detailed explanation). This converts batch-array of Transitions
-        # to Transition of batch-arrays.
+        """Double Q-learning optimization step with prioritized experience replay"""
+        transitions, indices, is_weights = self.memory.sample(self.batch_size)
         batch = Transition(*zip(*transitions))
 
         # Compute a mask of non-final states and concatenate the batch elements
@@ -187,14 +271,22 @@ class Model():
         # Compute expected Q values
         expected_state_action_values = (next_state_values * self.gamma) + reward_batch
 
-        # Compute Huber loss
-        criterion = nn.SmoothL1Loss()
-        loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
+        # Calculate TD errors for priority updating
+        td_errors = expected_state_action_values.unsqueeze(1) - state_action_values
 
+        # Apply importance sampling weights to the loss
+        criterion = nn.SmoothL1Loss(reduction='none')
+        loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
+        loss = (loss * is_weights.unsqueeze(1)).mean()
+
+        # Optimize the model
         optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_value_(policy_net.parameters(), self.gradient_clipping)
         optimizer.step()
+
+        # Update priorities in memory
+        self.memory.update_priorities(indices, td_errors)
 
         self.update_target_net()
         return loss.item()
@@ -282,7 +374,12 @@ class Model():
             'tau': self.tau,
             'lr': self.lr,
             'gradient_clipping': self.gradient_clipping,
-            'memory_size': self.memory.memory.maxlen
+            'memory_size': self.memory.capacity,
+            # PER parameters
+            'per_epsilon': self.memory.eps,
+            'per_alpha': self.memory.alpha,
+            'per_beta': self.memory.beta,
+            'per_beta_increment': self.memory.beta_increment
         }
 
     def get_model_info(self):
