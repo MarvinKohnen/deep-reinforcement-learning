@@ -23,7 +23,7 @@ class Agent(LearningAgent):
     def __init__(self, weights=None, use_double_dqn=False):
         # Define reward mapping as class attribute
         self.reward_mapping = {
-            e.COIN_COLLECTED: 1,
+            e.COIN_COLLECTED: 2,
             e.INVALID_ACTION: -0.5,
             e.KILLED_OPPONENT: 5,
             e.CRATE_DESTROYED: 1,
@@ -47,9 +47,8 @@ class Agent(LearningAgent):
 
     def act(self, state, **kwargs) -> int:
         """
-        Process state directly using all information except self_info and opponents_info
+        Process state directly using enhanced state representation
         """
-        # Determine if we're in evaluation mode (not training)
         eval_mode = not kwargs.get('train', True)
         
         # Convert relevant state components to numpy arrays
@@ -67,11 +66,11 @@ class Agent(LearningAgent):
         # Concatenate all elements into a single numpy array
         # state_array = np.concatenate(state_elements)
 
-        state_array = self.get_optimized_state(state)
+        state_array = self.get_enhanced_state(state)
 
         # Convert numpy array to tensor
         state_tensor = torch.tensor(state_array, device=device, dtype=torch.float32)
-
+        
         return self.q_learning.act(state_tensor, eval_mode=eval_mode)[0].item()
 
     def setup_training(self):
@@ -96,8 +95,8 @@ class Agent(LearningAgent):
         After step in environment. Use this for model training.
         """
         # Process both states
-        old_state_tensor = self.get_optimized_state(old_state)
-        new_state_tensor = None if new_state is None else self.get_optimized_state(new_state)
+        old_state_tensor = self.get_enhanced_state(old_state)
+        new_state_tensor = None if new_state is None else self.get_enhanced_state(new_state)
 
         reward = self._shape_reward(events)
 
@@ -221,3 +220,115 @@ class Agent(LearningAgent):
     def manhattan_distance(self, pos1, pos2):
         """Calculate Manhattan distance between two points"""
         return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
+    
+    def get_enhanced_state(self, state):
+        """
+        Enhanced state representation (72 features) for larger network (72->128->64->6)
+        """
+        # Get agent position from self_pos array
+        x, y = np.argwhere(state['self_pos'] == 1)[0]
+        
+        # 1. Immediate surroundings (8 features)
+        surroundings = []
+        for dx, dy in [(0,1), (1,0), (0,-1), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < ROWS and 0 <= ny < COLS:
+                is_wall = state['walls'][nx,ny] == 1
+                is_crate = state['crates'][nx,ny] == 1
+                surroundings.append(1.0 if not (is_wall or is_crate) else 0.0)
+            else:
+                surroundings.append(0.0)
+        
+        # 2. Danger awareness in 8 directions (40 features)
+        danger_features = []
+        blast_range = 3
+        for dx, dy in [(0,1), (1,0), (0,-1), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]:
+            direction_danger = [0.0] * 5  # [immediate_explosion, bomb_timer1, bomb_timer2, bomb_timer3, escape_route]
+            max_range = blast_range if dx*dy == 0 else 2  # Shorter range for diagonals
+            
+            has_escape = False
+            for distance in range(1, max_range + 2):
+                nx, ny = x + dx * distance, y + dy * distance
+                if 0 <= nx < ROWS and 0 <= ny < COLS:
+                    if state['walls'][nx,ny] == 1:
+                        break
+                    if state['explosions'][nx,ny] > 2:
+                        direction_danger[0] = 1.0 - (distance-1)/max_range
+                    if state['bombs'][nx,ny] > 0:
+                        timer = state['bombs'][nx,ny]
+                        direction_danger[int(timer)] = 1.0 - (distance-1)/max_range
+                    if not (state['walls'][nx,ny] == 1 or state['crates'][nx,ny] == 1 or 
+                        state['bombs'][nx,ny] > 0 or state['explosions'][nx,ny] > 2):
+                        has_escape = True
+            direction_danger[4] = 1.0 if has_escape else 0.0
+            danger_features.extend(direction_danger)
+        
+        # 3. Object awareness in 8 directions (24 features)
+        object_features = []
+        for dx, dy in [(0,1), (1,0), (0,-1), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]:
+            features = [0.0, 0.0, 0.0]  # [coin_distance, crate_distance, clear_path]
+            max_look = 4 if dx*dy == 0 else 3  # Adjust look range for diagonals
+            
+            for distance in range(1, max_look + 1):
+                nx, ny = x + dx * distance, y + dy * distance
+                if 0 <= nx < ROWS and 0 <= ny < COLS:
+                    if state['coins'][nx,ny] == 1 and features[0] == 0:
+                        features[0] = 1.0 - (distance-1)/max_look
+                    if state['crates'][nx,ny] == 1 and features[1] == 0:
+                        features[1] = 1.0 - (distance-1)/max_look
+                    if not (state['walls'][nx,ny] == 1 or state['crates'][nx,ny] == 1):
+                        features[2] = 1.0
+            object_features.extend(features)
+        
+        # 4. Global features (8 features)
+        max_distance = ROWS + COLS
+        coin_positions = np.where(state['coins'] == 1)
+        coin_distances = [self.manhattan_distance((x,y), (cx,cy)) 
+                        for cx, cy in zip(*coin_positions)] if len(coin_positions[0]) > 0 else []
+        nearest_coin = min(coin_distances) if coin_distances else max_distance
+        
+        danger_count = 0
+        for dx in range(-blast_range, blast_range + 1):
+            for dy in range(-blast_range, blast_range + 1):
+                if dx == 0 or dy == 0:  # Only in blast directions
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < ROWS and 0 <= ny < COLS:
+                        if state['bombs'][nx,ny] > 0 or state['explosions'][nx,ny] > 2:
+                            danger_count += 1
+        
+        global_features = [
+            nearest_coin/max_distance,
+            danger_count/(4 * blast_range),
+            float(state['self_info']['bombs_left']),
+            float(np.any(state['explosions'] > 2)),
+            np.sum(state['bombs'] > 0)/4,
+            np.sum(state['coins'])/9,
+            float(self.in_danger(state)),
+            float(np.any(state['bombs'] == 1))
+        ]
+        
+        # Combine all features (72 total)
+        final_state = np.array(surroundings + danger_features + object_features + global_features)
+        return final_state
+
+    def in_danger(self, state):
+        """Check if agent is in immediate danger from bombs or explosions"""
+        x, y = np.argwhere(state['self_pos'] == 1)[0]
+        blast_range = 3
+
+        # Check if on explosion
+        if state['explosions'][x, y] > 0:
+            return True
+
+        # Check for bombs in blast range
+        for dx in range(-blast_range, blast_range + 1):
+            for dy in range(-blast_range, blast_range + 1):
+                if dx == 0 or dy == 0:  # Only check in blast directions
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < ROWS and 0 <= ny < COLS:
+                        if state['bombs'][nx, ny] > 0:
+                            # Check if there's a wall between agent and bomb
+                            if not any(state['walls'][x + i*np.sign(dx), y + i*np.sign(dy)] == 1 
+                                     for i in range(1, abs(dx) + abs(dy))):
+                                return True
+        return False
