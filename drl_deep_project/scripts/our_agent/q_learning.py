@@ -137,8 +137,8 @@ class DQN(nn.Module):
     """ State approximation via Multi-Layer Perceptron """
     def __init__(self, n_observations, n_actions):
         super(DQN, self).__init__()
-        self.layer1 = nn.Linear(n_observations, 64)
-        self.layer2 = nn.Linear(64, 64)
+        self.layer1 = nn.Linear(n_observations, 128)
+        self.layer2 = nn.Linear(128, 64)
         self.layer3 = nn.Linear(64, n_actions)
 
     # Called with either one element to determine next action, or a batch
@@ -177,7 +177,7 @@ class Model():
     def __init__(self, load=True, path=Path(__file__).parent / "model.pt", weights_suffix=None):
         self.batch_size = 128 # self.batch_size is the number of transitions sampled from the replay buffer
         self.gamma = 0.99 # self.gamma is the discount factor
-        self.eps_start = 0.9 # self.eps_start is the starting value of epsilon
+        self.eps_start = 0.1 # self.eps_start is the starting value of epsilon
         self.eps_end = 0.1 # self.eps_end is the final value of epsilon
         self.eps_decay = 50000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
         self.tau = 0.005 # self.tau is the update rate of the target network
