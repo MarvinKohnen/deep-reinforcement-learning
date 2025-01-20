@@ -74,6 +74,8 @@ class Agent(LearningAgent):
         return action
 
     def update_transformation(self, state):
+        self.flipUD = 0
+        self.flipLR = 0
         pos = np.argwhere(state["self_pos"] == 1)[0]
         #print("pos: ", pos)
         height = len(state['self_pos'])
@@ -107,10 +109,17 @@ class Agent(LearningAgent):
         # Concatenate all elements into a single numpy array
         # state_array = np.concatenate(state_elements)
 
-        state_array = self.get_optimized_state(state)
+        #state_array = self.get_optimized_state(state)
+        state_array = self.get_scope_representation(state)
 
         # Convert numpy array to tensor
         state_tensor = torch.tensor(state_array, device=device, dtype=torch.float32)
+        #state_tensor = self.get_scope_representation(state)
+
+        out_action = self.q_learning.act(state_tensor, eval_mode=eval_mode)[0].item()
+
+        #print("action b4 transform:", out_action)
+        #print("action after transform:", self.transform_action(out_action))
 
         return self.transform_action(self.q_learning.act(state_tensor, eval_mode=eval_mode)[0].item())
 
@@ -140,8 +149,9 @@ class Agent(LearningAgent):
         if new_state is not None: self.transform_state(new_state)
 
         # Process both states
-        old_state_tensor = self.get_optimized_state(old_state)
-        new_state_tensor = None if new_state is None else self.get_optimized_state(new_state)
+        old_state_tensor = torch.tensor(self.get_scope_representation(old_state), device=device, dtype=torch.float32)
+        new_state_tensor = None if new_state is None else torch.tensor(self.get_scope_representation(new_state),
+                                                                       device=device, dtype=torch.float32)
 
         reward = self._shape_reward(events)
 
@@ -224,7 +234,7 @@ class Agent(LearningAgent):
 
 
         # Create fixed window around agent 
-        window_size = 3  # This gives 7x7 (3 cells in each direction)
+        window_size = 4  # This gives 7x7 (3 cells in each direction)
         padded_scope = np.pad(
             scope_representation,
             window_size,
@@ -238,7 +248,7 @@ class Agent(LearningAgent):
             agent_x - window_size : agent_x + window_size + 1, # (x+3)-3 : (x+3)+3+1 -> [x:x+7]
             agent_y - window_size : agent_y + window_size + 1  # (y+3)-3 : (y+3)+3+1 -> [y:y+7]
         ]
-        return torch.tensor(window, device=device, dtype=torch.float32).flatten()
+        return window.flatten() #torch.tensor(window, device=device, dtype=torch.float32).flatten()
 
     def get_danger_map(self, state):
         bombs = -1 * state["bombs"]
