@@ -55,7 +55,7 @@
 	\end{figure}
 	
 	
-	The Code for this model is found in the folder EDIT HERE!!!!!!!!!!!!!!!!
+	The Code for this model is found in the folder "simple\_dqn".
 	\newpage
 	
 	\section{Exercise B}
@@ -73,6 +73,26 @@
 		\item COIN\_FOUND: 1
 	\end{itemize}
 	
+	\begin{itemize}
+		\item COIN\_COLLECTED: 2
+		\item INVALID\_ACTION: -0.5
+		\item KILLED\_OPPONENT: 5
+		\item CRATE\_DESTROYED: 1
+		\item COIN\_FOUND: 1
+		\item GOT\_KILLED: -5
+		\item WAITED: -0.025
+		\item BOMB\_DROPPED: -0.0125
+		\item MOVED\_UP: -0.0125
+		\item MOVED\_RIGHT: -0.0125
+		\item MOVED\_DOWN: -0.0125
+		\item MOVED\_LEFT: -0.0125
+	\end{itemize}
+	
+	This reward shaping introduces a time penalty for every action, punishing the agent for any action it takes. The time penalty for moving is $-5/400$, i.e. the reward for getting killed divided by the maximum episode length.
+	
+	The idea behind this is that the agent should still prioritise surviving, as the cumulative reward for surviving the entire episode is still greater or equal to the reward for dying, i.e. the agent should never end in a local minimum of $-5$ by just blowing itself up immediately. 
+	The negative reward for waiting is doubled, encouraging the agent to do aything of value (allowing for more exploration of the state space) unless it leads to a negative reward (i.e.\ walking into an explosion).
+	The idea behind the time penalty in general is to introduce an intrinsic motivation for the agent to seek a positive reward, which in this case can be achieved simply by destroying crates or discovering coins.
 	
 	\subsection{Curriculum Learning and Catastrophic Forgetting}
 	We implemented various approaches to curriculum learning in our project. As stated earlier, our model was initially trained on the full tournament map, but we subsequently experimented with reduced-scale environments (e.g., 7x7 or 9x9 grids) to simplify the learning process. However, the models trained on these smaller maps failed to scale to larger environments, even when the scenario remained unchanged, rendering this approach ineffective.
@@ -171,6 +191,29 @@
 			\item Even though all observations have the agent in the top left quadrant, this might still lead to overfitting in some way, especially with the more refined state abstractions and the relative positions.
 		\end{itemize}
 	\end{itemize}
+	
+	\subsection{Training Time and Computation Cost}
+	The training duration is influenced by multiple factors, including processing power, episode length, and the computational device employed (GPU or CPU). Figure \ref{fig:4} illustrates a finetuning run comprising 9,500 episodes with relatively short episode lengths. This agent was trained on an NVIDIA 4080 Super GPU, which offers 16GB of memory. In an idle state, approximately 3.8 GB of this memory is utilized. The graph demonstrates that our model is not computationally intensive. The observed spikes in memory usage are attributed to various allocations initiated during the training process. The episode reward and episode length graphs support this thesis, as they do not exhibit data patterns that would require additional computational resources. The 9,500 episodes were completed in approximately 8,000 seconds, or 2 hours and 10 minutes. Other training runs, extending up to 50,000 episodes, required approximately 10 hours, which aligns proportionally with the time requirement observed in this case.
+	\begin{figure}[h!]
+		\centering
+		\includegraphics[width=1.3\textwidth]{images/gpu_usage}
+		\caption{Ressource usage during training.}
+		\label{fig:4}
+	\end{figure}
+	
+	\newpage
+	
+	\subsection{Best Performing Agent}
+	Lastly, we want to show the the learning curve and stats of our best performing agent, which will compete in the tournament. 
+	The first training resulted in the data in Figure \ref{fig:4}. We then finetuned the model and reiterated training, since the agent was a bit to aggressive and prioritized chasing rewards over its own safety. 
+		\begin{figure}[h!]
+		\centering
+		\includegraphics[width=1.0\textwidth]{images/best_training_results}
+		\caption{Learning curve of our best performing agent in full tournament space.}
+		\label{fig:5}
+	\end{figure}
+	
+	The code for this model is found in the folder "improved\_dqn".
 	
 	
 	
