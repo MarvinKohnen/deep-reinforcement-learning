@@ -49,7 +49,7 @@ plus additional flags as seen above
 
 For running and testing the model, do:
 
-``` python scripts/main.py ```
+``` python scripts/main.py --weights <timestamp>```
 
 
 ### Development environment
