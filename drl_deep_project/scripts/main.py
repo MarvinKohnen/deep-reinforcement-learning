@@ -27,7 +27,7 @@ class DummyAgent:
     def end_of_round(self, *args, **kwargs):
         pass
 
-def loop(env, agent, args, n_episodes=20000):
+def loop(env, agent, args, n_episodes=500):
     # Create logger with path relative to our_agent directory
     logger = TrainingLogger(
         save_dir='scripts/our_agent/training_logs',
@@ -111,7 +111,13 @@ def provideAgent(passive: bool, weights: str = None, use_double_dqn: bool = Fals
     else:
         agent = Agent(use_double_dqn=use_double_dqn)
         if weights == "fresh":
-            agent.q_learning = Model(load=False)  # Don't load existing weights
+            # Use the appropriate model based on use_double_dqn flag
+            if use_double_dqn:
+                from our_agent.double_q_learning import Model as DoubleModel
+                agent.q_learning = DoubleModel(load=False)
+            else:
+                from our_agent.q_learning import Model
+                agent.q_learning = Model(load=False)
         elif weights:  # if weights is a timestamp
             agent.q_learning.weights_suffix = weights  # Store the weights to load later
         return agent
@@ -123,7 +129,7 @@ def main(argv=None):
     # Notice that you can not use wrappers in the tournament!
     # However, you might wanna use this example interface to kickstart your experiments
     # env = ScoreRewardWrapper(env)
-    # env = TimePenaltyRewardWrapper(env, penalty=.5)
+    env = TimePenaltyRewardWrapper(env, penalty=.1)
     #env = RestrictedKeysWrapper(env, keys=["self_pos"])
     #env = FlattenWrapper(env)
     if args.video:
