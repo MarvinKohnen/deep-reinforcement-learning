@@ -111,7 +111,7 @@ class TrainingLogger:
         self.monitor_thread.start()
 
 
-        def monitor_resources(self):
+    def monitor_resources(self):
             while not self.stop_monitoring:
                 # CPU usage
                 cpu_percent = psutil.cpu_percent()
