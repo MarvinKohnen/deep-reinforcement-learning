@@ -1,3 +1,6 @@
+## [v2.2.1]
+### Fixed
+- do not return dead agents in game state
 
 ## [v2.2.0]
 ### Changed

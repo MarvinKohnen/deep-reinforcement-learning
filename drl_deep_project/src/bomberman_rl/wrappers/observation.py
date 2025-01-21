@@ -1,6 +1,7 @@
 from gymnasium import ObservationWrapper
 from gymnasium.wrappers import FlattenObservation
 from copy import deepcopy
+import numpy as np
                 
 
 class RestrictedKeysWrapper(ObservationWrapper):
@@ -43,3 +44,27 @@ class FlattenWrapper(FlattenObservation):
             return None
         else:
             return super().observation(obs)
+        
+
+class FixedLengthOpponentsInfo(ObservationWrapper):
+    """
+    Returns a fixed length Sequence for state entry `` in order for VecEnv to work.
+    This is fixed via wrapper in order to not make a last minute change to the raw state interface for tournament participants.
+    """
+    def __init__(self, env, n_opponents):
+        super().__init__(env)
+        self.n_opponents = n_opponents
+
+    def observation(self, obs):
+        if obs is None:
+            return None
+        else:
+            n_deads = self.n_opponents - len(obs["opponents_info"])
+            walls = obs["walls"]
+            dead_opponent = {
+                "score": 0,
+                "bombs_left": 0,
+                "position": np.zeros_like(walls)
+            }
+            obs["opponents_info"] += (dead_opponent,) * n_deads
+            return obs

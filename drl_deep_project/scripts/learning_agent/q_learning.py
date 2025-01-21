@@ -193,4 +193,4 @@ class Model():
         torch.save(self.policy_net.state_dict(), self.path)
 
     def load_weights(self):
-        self.policy_net.load_state_dict(torch.load(self.path, weights_only=True))
+        self.policy_net.load_state_dict(torch.load(self.path, weights_only=True, map_location=device))

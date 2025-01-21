@@ -346,7 +346,6 @@ class BombeRLeWorld(GenericWorld):
     def setup_agents(self, agents):
         # Add specified agents and start their subprocesses
         self.agents = []
-        flag_opponent = 0
         for agent_dir, train in agents:
             if list([d for d, t in agents]).count(agent_dir) > 1:
                 name = (
@@ -356,9 +355,7 @@ class BombeRLeWorld(GenericWorld):
                 )
             else:
                 name = agent_dir.split(".")[-1]
-            self.add_agent(agent_dir, name, train=train, env_user=not flag_opponent)
-            # Implicitly, first agent is controlled by env user
-            flag_opponent += 1
+            self.add_agent(agent_dir, name, train=train, env_user=agent_dir=="env_user")
 
     def build_arena(self):
         if self.scenario_info["TYPE"] != "BASIC":
@@ -532,7 +529,7 @@ class BombeRLeWorld(GenericWorld):
             "field": np.array(self.arena),
             "self": agent.get_state(),
             "others": [
-                other.get_state() for other in self.agents if other is not agent # in self.active_agents if other is not agent
+                other.get_state() for other in self.active_agents if other is not agent
             ],
             "bombs": [bomb.get_state() for bomb in self.bombs],
             "coins": [coin.get_state() for coin in self.coins if coin.collectable],
