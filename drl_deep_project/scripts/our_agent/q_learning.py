@@ -177,9 +177,9 @@ class Model():
     def __init__(self, load=True, path=Path(__file__).parent / "model.pt", weights_suffix=None):
         self.batch_size = 128 # self.batch_size is the number of transitions sampled from the replay buffer
         self.gamma = 0.8 # self.gamma is the discount factor
-        self.eps_start = 0.1 # self.eps_start is the starting value of epsilon
+        self.eps_start = 0.9 # self.eps_start is the starting value of epsilon
         self.eps_end = 0.1 # self.eps_end is the final value of epsilon
-        self.eps_decay = 5000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
+        self.eps_decay = 100000 # self.eps_decay controls the rate of exponential decay of epsilon, higher means a slower decay
         self.tau = 0.005 # self.tau is the update rate of the target network
         self.lr = 1e-4 # self.lr is the learning rate of the ``AdamW`` optimizer
         self.gradient_clipping = 100
@@ -214,8 +214,8 @@ class Model():
         self.steps += 1
         state = state.clone().detach().to(device).unsqueeze(0)
         
-        # Use eps_end during evaluation
-        eps_threshold = self.eps_end if eval_mode else self.eps_end + (self.eps_start - self.eps_end) * \
+        # Use greedy policy during evaluation
+        eps_threshold = 0 if eval_mode else self.eps_end + (self.eps_start - self.eps_end) * \
             math.exp(-1. * self.steps / self.eps_decay)
         sample = random.random()
         if sample > eps_threshold:
