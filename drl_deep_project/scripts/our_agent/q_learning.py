@@ -21,6 +21,7 @@ device = torch.device(
     "cpu"
 )
 
+
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
@@ -215,7 +216,7 @@ class Model():
         state = state.clone().detach().to(device).unsqueeze(0)
         
         # Use eps_end during evaluation
-        eps_threshold = 0 if eval_mode else self.eps_end + (self.eps_start - self.eps_end) * \
+        eps_threshold = self.eps_end if eval_mode else self.eps_end + (self.eps_start - self.eps_end) * \
             math.exp(-1. * self.steps / self.eps_decay)
         sample = random.random()
         if sample > eps_threshold:
