@@ -269,6 +269,7 @@ class Agent(LearningAgent):
 
             direction_danger[4] = 1.0 if has_escape else 0.0
             danger_features.extend(direction_danger)
+
         
         # 3. Object awareness in 8 directions (24 features)
         object_features = []
