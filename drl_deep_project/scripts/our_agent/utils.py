@@ -6,6 +6,10 @@ import logging
 import time
 import json
 from pathlib import Path
+import psutil
+import GPUtil
+import threading
+
 
 class TrainingLogger:
     def __init__(self, window_size=100, save_dir='training_logs', fresh=False, agent=None, scenario=None, use_double_dqn=False):
@@ -94,6 +98,42 @@ class TrainingLogger:
         self.recent_rewards = deque(maxlen=window_size)
         self.recent_losses = deque(maxlen=window_size)
 
+
+         # Initialize lists for resource usage
+        self.cpu_usage = []
+        self.ram_usage = []
+        self.gpu_usage = []
+        self.gpu_memory = []
+
+        # Start resource monitoring
+        self.stop_monitoring = False
+        self.monitor_thread = threading.Thread(target=self.monitor_resources)
+        self.monitor_thread.start()
+
+
+        def monitor_resources(self):
+            while not self.stop_monitoring:
+                # CPU usage
+                cpu_percent = psutil.cpu_percent()
+                self.cpu_usage.append(cpu_percent)
+
+                # RAM usage
+                ram_percent = psutil.virtual_memory().percent
+                self.ram_usage.append(ram_percent)
+
+                # GPU usage (if available)
+                gpus = GPUtil.getGPUs()
+                if gpus:
+                    gpu = gpus[0]  # Assuming we're using the first GPU
+                    self.gpu_usage.append(gpu.load * 100)
+                    self.gpu_memory.append(gpu.memoryUsed)
+                else:
+                    self.gpu_usage.append(0)
+                    self.gpu_memory.append(0)
+
+                time.sleep(1)  # Update every second
+
+
     def _init_empty_stats(self):
         """Initialize empty statistics"""
         self.rewards = []
@@ -156,7 +196,11 @@ class TrainingLogger:
             'eps_values': [round(float(e), 4) for e in self.eps_values],
             'steps': [int(s) for s in self.steps],
             'episode_lengths': [int(l) for l in self.episode_lengths],
-            'dqn_type': 'double' if self.use_double_dqn else 'single'
+            'dqn_type': 'double' if self.use_double_dqn else 'single',
+            'cpu_usage': self.cpu_usage,
+            'ram_usage': self.ram_usage,
+            'gpu_usage': self.gpu_usage,
+            'gpu_memory': self.gpu_memory
         }
         
         with open(self.save_dir / 'training_stats.json', 'w') as f:
@@ -164,7 +208,7 @@ class TrainingLogger:
 
     def plot_training(self, save_only=False):
         """Plot training progress using all collected data with smoothed curves"""
-        fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(20, 12))  # Changed to 4 rows, 1 column
+        fig, (ax1, ax2, ax3, ax4, ax5) = plt.subplots(5, 1, figsize=(20, 12))  # Changed to 5 rows, 1 column
         
         # Calculate rolling averages with dynamic window size
         max_window = 100
@@ -211,6 +255,21 @@ class TrainingLogger:
         ax4.set_xlabel('Episode')
         ax4.set_ylabel('Steps')
         ax4.legend()
+
+        # Plot resource usage
+        ax5.plot(self.cpu_usage, label='CPU Usage (%)')
+        ax5.plot(self.ram_usage, label='RAM Usage (%)')
+        if any(self.gpu_usage):
+            ax5.plot(self.gpu_usage, label='GPU Usage (%)')
+            ax5_twin = ax5.twinx()
+            ax5_twin.plot(self.gpu_memory, label='GPU Memory (MB)', color='r')
+            ax5_twin.set_ylabel('GPU Memory (MB)')
+        ax5.set_title('Resource Usage')
+        ax5.set_xlabel('Time (s)')
+        ax5.set_ylabel('Usage (%)')
+        ax5.legend(loc='upper left')
+        if any(self.gpu_usage):
+            ax5_twin.legend(loc='upper right')
         
         plt.tight_layout()
         
@@ -225,3 +284,10 @@ class TrainingLogger:
     def plot_final_training(self):
         """Plot and save final training curves"""
         self.plot_training(save_only=True) 
+
+
+    def __del__(self):
+        # Stop the resource monitoring thread
+        self.stop_monitoring = True
+        if hasattr(self, 'monitor_thread'):
+            self.monitor_thread.join()

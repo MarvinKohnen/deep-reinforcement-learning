@@ -27,7 +27,7 @@ class DummyAgent:
     def end_of_round(self, *args, **kwargs):
         pass
 
-def loop(env, agent, args, n_episodes=20000):
+def loop(env, agent, args, n_episodes=10000):
     # Create logger with path relative to our_agent directory
     logger = TrainingLogger(
         save_dir='scripts/our_agent/training_logs',
