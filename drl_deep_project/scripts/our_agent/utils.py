@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 class TrainingLogger:
-    def __init__(self, window_size=100, save_dir='training_logs', fresh=False, agent=None, scenario=None):
+    def __init__(self, window_size=100, save_dir='training_logs', fresh=False, agent=None, scenario=None, use_double_dqn=False):
         # Create base save directory
         self.base_dir = Path(save_dir)
         self.base_dir.mkdir(exist_ok=True)
@@ -23,15 +23,17 @@ class TrainingLogger:
                 self.model_timestamp = agent.training_timestamp
             else:
                 # Try to find most recent model directory
-                model_dirs = [d for d in self.base_dir.iterdir() if d.is_dir() and d.name.startswith('model_')]
+                prefix = 'double_' if use_double_dqn else 'model_'
+                model_dirs = [d for d in self.base_dir.iterdir() if d.is_dir() and d.name.startswith(prefix)]
                 if model_dirs:
                     latest_model = max(model_dirs, key=lambda x: x.name)
-                    self.model_timestamp = latest_model.name.replace('model_', '')
+                    self.model_timestamp = latest_model.name.replace(prefix, '')
                 else:
                     self.model_timestamp = time.strftime("%Y%m%d_%H%M%S")
         
-        # Create model directory
-        self.model_dir = self.base_dir / f"model_{self.model_timestamp}"
+        # Create model directory with appropriate prefix
+        prefix = 'double_' if use_double_dqn else 'model_'
+        self.model_dir = self.base_dir / f"{prefix}{self.model_timestamp}"
         self.model_dir.mkdir(exist_ok=True)
         
         # Create timestamped directory for this run
@@ -42,8 +44,9 @@ class TrainingLogger:
         # Import settings for board size
         from bomberman_rl.envs import settings
         
-        # Store agent reference
+        # Store agent reference and DQN type
         self.agent = agent
+        self.use_double_dqn = use_double_dqn
         
         # Initialize config
         self.config = {
@@ -56,7 +59,8 @@ class TrainingLogger:
                     'rows': settings.ROWS,
                     'cols': settings.COLS
                 }
-            }
+            },
+            'dqn_type': 'double' if use_double_dqn else 'single'
         }
         
         if fresh:
@@ -83,29 +87,36 @@ class TrainingLogger:
                         self.episode_lengths = saved_stats.get('episode_lengths', [])
                         self.episode_offset = int(self.steps[-1] + 1) if self.steps else 0
                 else:
-                    self.rewards = []
-                    self.losses = []
-                    self.eps_values = []
-                    self.steps = []
-                    self.episode_lengths = []
-                    self.episode_offset = 0
+                    self._init_empty_stats()
             else:
-                # No previous runs found
-                self.rewards = []
-                self.losses = []
-                self.eps_values = []
-                self.steps = []
-                self.episode_lengths = []
-                self.episode_offset = 0
+                self._init_empty_stats()
         
         self.recent_rewards = deque(maxlen=window_size)
         self.recent_losses = deque(maxlen=window_size)
 
+    def _init_empty_stats(self):
+        """Initialize empty statistics"""
+        self.rewards = []
+        self.losses = []
+        self.eps_values = []
+        self.steps = []
+        self.episode_lengths = []
+        self.episode_offset = 0
+
     def log_episode(self, episode, epsilon, loss, reward, episode_length):
         # Update model info if it's now available
-        if self.agent and self.agent.q_learning and self.agent.q_learning.policy_net:
-            if not self.config['model']:  # Only update if empty
-                self.config['model'] = self.agent.q_learning.policy_net.get_architecture_info()
+        if self.agent and self.agent.q_learning and not self.config['model']:
+            if self.use_double_dqn:
+                # For Double DQN
+                if hasattr(self.agent.q_learning, 'policy_net_a'):  # Check if it's actually a double DQN model
+                    self.config['model'] = {
+                        'policy_net_a': self.agent.q_learning.policy_net_a.get_architecture_info(),
+                        'policy_net_b': self.agent.q_learning.policy_net_b.get_architecture_info()
+                    }
+            else:
+                # For Single DQN
+                if hasattr(self.agent.q_learning, 'policy_net'):  # Check if it's a single DQN model
+                    self.config['model'] = self.agent.q_learning.get_model_info()
         
         # Adjust episode number to continue from previous training
         actual_episode = episode + self.episode_offset
@@ -144,7 +155,8 @@ class TrainingLogger:
             'losses': [round(float(l), 4) for l in self.losses],
             'eps_values': [round(float(e), 4) for e in self.eps_values],
             'steps': [int(s) for s in self.steps],
-            'episode_lengths': [int(l) for l in self.episode_lengths]
+            'episode_lengths': [int(l) for l in self.episode_lengths],
+            'dqn_type': 'double' if self.use_double_dqn else 'single'
         }
         
         with open(self.save_dir / 'training_stats.json', 'w') as f:
