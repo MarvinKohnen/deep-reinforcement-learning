@@ -44,56 +44,13 @@ class Agent(LearningAgent):
         ModelClass = DoubleDQN if self.use_double_dqn else SingleDQN
         self.q_learning = ModelClass()
 
-    def transform_state(self, state):
-        self.update_transformation(state)
-        for key in state:
-            if key == 'round' or key == 'step':
-                continue
-            elif key == 'self_info':
-                state[key]['position'] = self.transform_map(state[key]['position'])
-            elif key == 'opponents_info':
-                for op in range(len(state[key])):
-                    state[key][op]['position'] = self.transform_map(state[key][op]['position'])
-            else:
-                state[key] = self.transform_map(state[key])
-
-    def transform_map(self, map):
-        #print(obs)
-        #print("flipud:", self.flipUD)
-        #print("fliplr:", self.flipLR)
-        if self.flipUD == 1:
-            map = np.array(np.flipud(map))
-        if self.flipLR == 1:
-            map = np.array(np.fliplr(map))
-        return map
-
-    def transform_action(self, action):
-        if self.flipUD == 1 and (action == 2 or action == 0):
-            return abs(action-2)
-        if self.flipLR == 1 and (action == 1 or action == 3):
-            return 1 if action == 3 else 3
-        return action
-
-    def update_transformation(self, state):
-        self.flipUD = 0
-        self.flipLR = 0
-        pos = np.argwhere(state["self_pos"] == 1)[0]
-        #print("pos: ", pos)
-        height = len(state['self_pos'])
-        width = len(state['self_pos'][0])
-        if pos[0] > (height+1)//2 - 1:
-            self.flipUD = 1
-        if pos[1] > (width+1)//2 - 1:
-            self.flipLR = 1
 
     def act(self, state, **kwargs) -> int:
         """
         Process state directly using enhanced state representation
         """
         eval_mode = not kwargs.get('train', True)
-
-        # Update transformation variables
-        self.transform_state(state)
+        
         # Convert relevant state components to numpy arrays
         # state_elements = [
         #     np.array(state['walls']).flatten(),
@@ -114,7 +71,7 @@ class Agent(LearningAgent):
         # Convert numpy array to tensor
         state_tensor = torch.tensor(state_array, device=device, dtype=torch.float32)
         
-        return self.transform_action(self.q_learning.act(state_tensor, eval_mode=eval_mode)[0].item())
+        return self.q_learning.act(state_tensor, eval_mode=eval_mode)[0].item()
 
     def setup_training(self):
         """
@@ -137,10 +94,6 @@ class Agent(LearningAgent):
         """
         After step in environment. Use this for model training.
         """
-        #Transform both states
-        self.transform_state(old_state)
-        if new_state is not None: self.transform_state(new_state)
-
         # Process both states
         old_state_tensor = self.get_enhanced_state(old_state)
         new_state_tensor = None if new_state is None else self.get_enhanced_state(new_state)

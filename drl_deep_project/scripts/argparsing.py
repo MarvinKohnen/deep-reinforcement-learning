@@ -77,6 +77,12 @@ def parse(argv=None):
         default=None,
         help="Specify 'fresh' for new weights or timestamp (e.g., '20240315_143022') to load specific checkpoint"
     )
+    parser.add(
+        "--use-double-dqn",
+        default=False,
+        action="store_true",
+        help="Use double DQN instead of single DQN"
+    )
 
     args = parser.parse_args(argv)
 
