@@ -2,7 +2,7 @@ import time
 import gymnasium
 from gymnasium.wrappers import RecordVideo
 
-from bomberman_rl import ScoreRewardWrapper, RestrictedKeysWrapper, FlattenWrapper, TimePenaltyRewardWrapper
+from bomberman_rl import ScoreRewardWrapper, RestrictedKeysWrapper, FlattenWrapper, TimePenaltyRewardWrapper, FixedLengthOpponentsInfo
 
 from argparsing import parse
 from rule_based_agent.agent import Agent
@@ -68,11 +68,12 @@ def provideAgent(passive: bool):
 def main(argv=None):
     args = parse(argv)
     env = gymnasium.make("bomberman_rl/bomberman-v0", args=args)
+    env = FixedLengthOpponentsInfo(env)
 
     # Notice that you can not use wrappers in the tournament!
     # However, you might wanna use this example interface to kickstart your experiments
-    env = ScoreRewardWrapper(env)
-    env = TimePenaltyRewardWrapper(env, penalty=.1)
+    # env = ScoreRewardWrapper(env)
+    # env = TimePenaltyRewardWrapper(env, penalty=.1)
     #env = RestrictedKeysWrapper(env, keys=["self_pos"])
     #env = FlattenWrapper(env)
     if args.video:
