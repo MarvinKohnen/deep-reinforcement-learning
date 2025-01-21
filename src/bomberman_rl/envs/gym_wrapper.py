@@ -16,6 +16,7 @@ class BombermanEnvWrapper(gym.Env):
     def __init__(self, args):
         self.args = args
         self.render_mode = args.render_mode
+        self.passive = args.passive
 
         # Delegate
         agents = []
@@ -23,7 +24,7 @@ class BombermanEnvWrapper(gym.Env):
             agents.append((player_name, 0))
         for player_name in (args.learners if args.learners else []):
             agents.append((player_name, 1))
-        if not args.passive:
+        if not self.passive:
             agents = [("env_user", 0)] + agents
         self.delegate = BombeRLeWorld(self.args, agents)
 
@@ -70,8 +71,12 @@ class BombermanEnvWrapper(gym.Env):
         return False
 
     def _get_obs(self):
-        obs = self.delegate.get_state_for_agent(self.delegate.agents[0]) # agent 0 is implicitly the exterior agent
-        return legacy2gym(obs)
+        if not self.passive:
+            return legacy2gym(self.delegate.get_state_for_agent(self.delegate.agents[0])) # agent 0 is implicitly the exterior agent
+        elif self.delegate.active_agents:
+            return legacy2gym(self.delegate.get_state_for_agent(self.delegate.active_agents[0]))
+        else:
+            return None
 
     def _get_info(self):
         return {
