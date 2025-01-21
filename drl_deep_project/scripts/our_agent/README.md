@@ -33,7 +33,7 @@ Key Components:
 - Training runs are visualized and training stats are saved
 - Added training and evaluating different agents by introducing new flags
 - Implements reward shaping and state optimization for the Bomberman environment
-
+ 
 ### Instructions on how to train, run and test the agent:
 
 Added flags, other than the ones given are:
