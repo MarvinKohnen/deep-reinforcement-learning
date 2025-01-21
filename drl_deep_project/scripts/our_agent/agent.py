@@ -266,6 +266,7 @@ class Agent(LearningAgent):
                     if not (state['walls'][nx,ny] == 1 or state['crates'][nx,ny] == 1 or 
                         state['bombs'][nx,ny] > 0 or state['explosions'][nx,ny] > 2):
                         has_escape = True
+
             direction_danger[4] = 1.0 if has_escape else 0.0
             danger_features.extend(direction_danger)
         
