@@ -307,7 +307,7 @@ class Agent(LearningAgent):
             float(np.any(state['bombs'] == 1))
         ]
         
-        # Combine all features (72 total)
+        # Combine all features (80 total)
         final_state = np.array(surroundings + danger_features + object_features + global_features)
         return final_state
 
