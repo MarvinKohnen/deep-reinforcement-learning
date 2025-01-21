@@ -24,25 +24,18 @@ class Agent(LearningAgent):
         # Define reward mapping as class attribute
         self.reward_mapping = {
             e.COIN_COLLECTED: 2,
-<<<<<<< HEAD
-            e.INVALID_ACTION: -1,
-            e.KILLED_OPPONENT: 10,
-            e.CRATE_DESTROYED: 0.5,
-            e.GOT_KILLED: -14,
-            e.WAITED: -0.2,
-            e.BOMB_DROPPED: -0.2,
-            e.MOVED_DOWN: -0.1,
-            e.MOVED_LEFT: -0.1,
-            e.MOVED_RIGHT: -0.1,
-            e.MOVED_UP: -0.1
-=======
             e.INVALID_ACTION: -0.5,
             e.KILLED_OPPONENT: 5,
             e.CRATE_DESTROYED: 1,
             e.COIN_FOUND: 1,
             e.GOT_KILLED: -5,
-            e.WAITED: -0.1,
->>>>>>> julius-private
+            e.WAITED: -0.025,
+            #5/400:
+            e.BOMB_DROPPED: -0.0125,
+            e.MOVED_DOWN: -0.0125,
+            e.MOVED_LEFT: -0.0125,
+            e.MOVED_UP: -0.0125,
+            e.MOVED_RIGHT: -0.0125,
         }
         self.use_double_dqn = use_double_dqn
         ModelClass = DoubleDQN if use_double_dqn else SingleDQN
