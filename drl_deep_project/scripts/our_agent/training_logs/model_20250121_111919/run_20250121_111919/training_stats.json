@@ -1,0 +1,116 @@
+{
+    "config": {
+        "model": {
+            "type": "DQN",
+            "input_size": 80,
+            "hidden_layers": [
+                128,
+                64
+            ],
+            "output_size": 6
+        },
+        "hyperparameters": {
+            "batch_size": 128,
+            "gamma": 0.8,
+            "eps_start": 0.1,
+            "eps_end": 0.1,
+            "eps_decay": 5000,
+            "tau": 0.005,
+            "lr": 0.0001,
+            "gradient_clipping": 100,
+            "memory_size": 10000,
+            "per_epsilon": 0.01,
+            "per_alpha": 0.6,
+            "per_beta": 0.4,
+            "per_beta_increment": 0.001
+        },
+        "reward_mapping": {
+            "COIN_COLLECTED": 2,
+            "INVALID_ACTION": -0.5,
+            "KILLED_OPPONENT": 5,
+            "CRATE_DESTROYED": 1,
+            "COIN_FOUND": 1,
+            "GOT_KILLED": -5,
+            "WAITED": -0.1
+        },
+        "env": {
+            "scenario": "curriculum-coin",
+            "board_size": {
+                "rows": 17,
+                "cols": 17
+            }
+        },
+        "dqn_type": "single"
+    },
+    "rewards": [
+        -23.7,
+        -11.1,
+        -7.0,
+        -6.6,
+        -5.0,
+        -3.2,
+        -10.5,
+        -3.0,
+        3.9,
+        -6.5,
+        31.9,
+        9.3
+    ],
+    "losses": [
+        0.1052,
+        0.101,
+        0.1352,
+        0.1655,
+        0.1753,
+        0.2075,
+        0.1849,
+        0.1744,
+        0.107,
+        0.0473,
+        0.0503,
+        0.0298
+    ],
+    "eps_values": [
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1
+    ],
+    "steps": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+    ],
+    "episode_lengths": [
+        82,
+        28,
+        5,
+        6,
+        7,
+        5,
+        50,
+        6,
+        255,
+        27,
+        48,
+        249
+    ],
+    "dqn_type": "single"
+}

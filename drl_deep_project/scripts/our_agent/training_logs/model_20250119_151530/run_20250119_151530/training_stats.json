@@ -1,0 +1,29 @@
+{
+    "config": {
+        "model": {},
+        "hyperparameters": {},
+        "reward_mapping": {},
+        "env": {
+            "scenario": "classic",
+            "board_size": {
+                "rows": 17,
+                "cols": 17
+            }
+        }
+    },
+    "rewards": [
+        -2.1
+    ],
+    "losses": [
+        0.0639
+    ],
+    "eps_values": [
+        0.8999
+    ],
+    "steps": [
+        0
+    ],
+    "episode_lengths": [
+        5
+    ]
+}
