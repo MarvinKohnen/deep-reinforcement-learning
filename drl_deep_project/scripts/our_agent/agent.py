@@ -23,13 +23,19 @@ class Agent(LearningAgent):
     def __init__(self, weights=None, use_double_dqn=False):
         # Define reward mapping as class attribute
         self.reward_mapping = {
-            e.COIN_COLLECTED: 2,
+            e.COIN_COLLECTED: 4,
             e.INVALID_ACTION: -0.5,
-            e.KILLED_OPPONENT: 5,
+            e.KILLED_OPPONENT: 3,
             e.CRATE_DESTROYED: 1,
             e.COIN_FOUND: 1,
-            e.GOT_KILLED: -5,
-            e.WAITED: -0.1,
+            e.GOT_KILLED: -8,
+            e.WAITED: -0.025,
+            #5/400:
+            e.BOMB_DROPPED: -0.0125,
+            e.MOVED_DOWN: -0.0125,
+            e.MOVED_LEFT: -0.0125,
+            e.MOVED_UP: -0.0125,
+            e.MOVED_RIGHT: -0.0125,
         }
         self.use_double_dqn = use_double_dqn
         ModelClass = DoubleDQN if use_double_dqn else SingleDQN
@@ -275,46 +281,47 @@ class Agent(LearningAgent):
         # Get agent position from self_pos array
         x, y = np.argwhere(state['self_pos'] == 1)[0]
         
-        # 1. Immediate surroundings (24 features)
+        # 1. Immediate surroundings (8 features)
         surroundings = []
-        for dx in range(1,3):
-            for dy in range(1,3):
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < ROWS and 0 <= ny < COLS:
-                    if state['walls'][nx,ny] == 1 or state['crates'][nx,ny] == 1 or state['explosions'][nx,ny] > 2:
-                        surroundings.append(0.0)
-                    else:
-                        surroundings.append(1.0)
+        for dx, dy in [(0,1), (1,0), (0,-1), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < ROWS and 0 <= ny < COLS:
+                is_wall = state['walls'][nx,ny] == 1
+                is_crate = state['crates'][nx,ny] == 1
+                surroundings.append(1.0 if not (is_wall or is_crate) else 0.0)
+            else:
+                surroundings.append(0.0)
         
-        # # 2. Danger awareness in 8 directions (40 features)
-        # danger_features = []
-        # blast_range = 3
-        # for dx, dy in [(0,1), (1,0), (0,-1), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]:
-        #     direction_danger = [0.0] * 5  # [immediate_explosion, bomb_timer1, bomb_timer2, bomb_timer3, escape_route]
-        #     max_range = blast_range if dx*dy == 0 else 2  # Shorter range for diagonals
-        #
-        #     has_escape = True
-        #     for distance in range(1, max_range + 2):
-        #         nx, ny = x + dx * distance, y + dy * distance
-        #         if 0 <= nx < ROWS and 0 <= ny < COLS:
-        #             if state['walls'][nx,ny] == 1:
-        #                 has_escape = False
-        #                 break
-        #             if state['explosions'][nx,ny] > 2:
-        #                 direction_danger[0] = 1.0 - (distance-1)/max_range
-        #             if state['bombs'][nx,ny] > 0:
-        #                 timer = state['bombs'][nx,ny]
-        #                 direction_danger[int(timer)] = 1.0 - (distance-1)/max_range
-        #             if (state['walls'][nx,ny] == 1 or state['crates'][nx,ny] == 1 or
-        #                 state['bombs'][nx,ny] > 0 or state['explosions'][nx,ny] > 2):
-        #                 has_escape = False
-        #     direction_danger[4] = 1.0 if has_escape else 0.0
-        #     danger_features.extend(direction_danger)
-        #
-        # 3. Object awareness in 8 directions (40 features)
+        # 2. Danger awareness in 8 directions (40 features)
+        danger_features = []
+        blast_range = 3
+        for dx, dy in [(0,1), (1,0), (0,-1), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]:
+            direction_danger = [0.0] * 5  # [immediate_explosion, bomb_timer1, bomb_timer2, bomb_timer3, escape_route]
+            max_range = blast_range if dx*dy == 0 else 2  # Shorter range for diagonals
+
+            has_escape = False
+            for distance in range(1, max_range + 2):
+                nx, ny = x + dx * distance, y + dy * distance
+                if 0 <= nx < ROWS and 0 <= ny < COLS:
+                    if state['walls'][nx,ny] == 1:
+                        break
+                    if state['explosions'][nx,ny] > 2:
+                        direction_danger[0] = 1.0 - (distance-1)/max_range
+                    if state['bombs'][nx,ny] > 0:
+                        timer = state['bombs'][nx,ny]
+                        direction_danger[int(timer)] = 1.0 - (distance-1)/max_range
+                    if not (state['walls'][nx,ny] == 1 or state['crates'][nx,ny] == 1 or
+                        state['bombs'][nx,ny] > 0 or state['explosions'][nx,ny] > 2):
+                        has_escape = True
+
+            direction_danger[4] = 1.0 if has_escape else 0.0
+            danger_features.extend(direction_danger)
+
+
+        # 3. Object awareness in 8 directions (24 features)
         object_features = []
         for dx, dy in [(0,1), (1,0), (0,-1), (-1,0), (1,1), (1,-1), (-1,1), (-1,-1)]:
-            features = [0.0, 0.0, 0.0, 0.0, 0.0]  # [coin_distance, crate_distance, bomb1_distance, bomb2_distance, bomb3_distance]
+            features = [0.0, 0.0, 0.0]  # [coin_distance, crate_distance, clear_path]
             max_look = 4 if dx*dy == 0 else 3  # Adjust look range for diagonals
 
             for distance in range(1, max_look + 1):
@@ -324,12 +331,8 @@ class Agent(LearningAgent):
                         features[0] = 1.0 - (distance-1)/max_look
                     if state['crates'][nx,ny] == 1 and features[1] == 0:
                         features[1] = 1.0 - (distance-1)/max_look
-                    if state['bombs'][nx,ny] == 1:
-                        features[2] = 1.0 - (distance-1)/max_look
-                    if state['bombs'][nx,ny] == 2:
-                        features[3] = 1.0 - (distance-1)/max_look
-                    if state['bombs'][nx,ny] == 3:
-                        features[4] = 1.0 - (distance-1)/max_look
+                    if not (state['walls'][nx,ny] == 1 or state['crates'][nx,ny] == 1):
+                        features[2] = 1.0
             object_features.extend(features)
         
         # 4. Global features (8 features)
@@ -338,24 +341,19 @@ class Agent(LearningAgent):
         coin_distances = [self.manhattan_distance((x,y), (cx,cy)) 
                         for cx, cy in zip(*coin_positions)] if len(coin_positions[0]) > 0 else []
         nearest_coin = min(coin_distances) if coin_distances else max_distance
-
-        enemy_positions = np.where(state['opponents_pos'] == 1)
-        enemy_distances = [self.manhattan_distance((x, y), (ex, ey))
-                           for ex, ey in zip(*enemy_positions)] if len(enemy_positions[0]) > 0 else []
-        nearest_enemy = min(enemy_distances) if enemy_distances else max_distance
         
-        # danger_count = 0
-        # for dx in range(-blast_range, blast_range + 1):
-        #     for dy in range(-blast_range, blast_range + 1):
-        #         if dx == 0 or dy == 0:  # Only in blast directions
-        #             nx, ny = x + dx, y + dy
-        #             if 0 <= nx < ROWS and 0 <= ny < COLS:
-        #                 if state['bombs'][nx,ny] > 0 or state['explosions'][nx,ny] > 2:
-        #                     danger_count += 1
+        danger_count = 0
+        for dx in range(-blast_range, blast_range + 1):
+            for dy in range(-blast_range, blast_range + 1):
+                if dx == 0 or dy == 0:  # Only in blast directions
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < ROWS and 0 <= ny < COLS:
+                        if state['bombs'][nx,ny] > 0 or state['explosions'][nx,ny] > 2:
+                            danger_count += 1
         
         global_features = [
             nearest_coin/max_distance,
-            nearest_enemy/max_distance,
+            danger_count/(4 * blast_range),
             float(state['self_info']['bombs_left']),
             float(np.any(state['explosions'] > 2)),
             np.sum(state['bombs'] > 0)/4,
@@ -365,7 +363,7 @@ class Agent(LearningAgent):
         ]
         
         # Combine all features (72 total)
-        final_state = np.array(surroundings + object_features + global_features)
+        final_state = np.array(surroundings + danger_features + object_features + global_features)
         return final_state
 
     def in_danger(self, state):
@@ -374,7 +372,7 @@ class Agent(LearningAgent):
         blast_range = 3
 
         # Check if on explosion
-        if state['explosions'][x, y] > 2:
+        if state['explosions'][x, y] > 0:
             return True
 
         # Check for bombs in blast range
