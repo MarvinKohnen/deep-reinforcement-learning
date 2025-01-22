@@ -1,4 +1,5 @@
 import numpy as np
+import json
 from gymnasium.spaces import Space, Discrete, MultiBinary, MultiDiscrete, Sequence, Dict, Text
 
 from . import settings as s
@@ -88,18 +89,18 @@ def legacy2gym(state):
     opponents_info = tuple([_agent_legacy2gym(agent, pos) for agent, pos in zip(state["others"], single_opponents_pos)])
 
     return {
-            "round": state["round"],
-            "step": state["step"],
-            "walls": walls,
-            "crates": crates,
-            "coins": coins,
-            "bombs": bombs,
-            "explosions": state["explosion_map"],
-            "self_pos": self_pos,
-            "opponents_pos": opponents_pos,
-            "self_info": self_info,
-            "opponents_info": opponents_info
-        }
+        "round": state["round"],
+        "step": state["step"],
+        "walls": walls,
+        "crates": crates,
+        "coins": coins,
+        "bombs": bombs,
+        "explosions": state["explosion_map"],
+        "self_pos": self_pos,
+        "opponents_pos": opponents_pos,
+        "self_info": self_info,
+        "opponents_info": opponents_info
+    }
 
 
 def gym2legacy(state):
@@ -130,3 +131,40 @@ def gym2legacy(state):
         "coins": coins,
         "explosion_map": state["explosions"]
     }
+
+
+def serializeGym(state):
+
+    def _serializeLiteral(literal):
+        if isinstance(literal, dict):
+            return {
+                k: _serializeLiteral(v) for k, v in literal.items()
+            }
+        elif isinstance(literal, np.ndarray):
+            return literal.tolist()
+        elif isinstance(literal, list):
+            return [_serializeLiteral(l) for l in literal]
+        elif isinstance(literal, tuple):
+            return tuple(_serializeLiteral(l) for l in literal)
+        else:
+            return literal
+
+    state = {
+        k: _serializeLiteral(v) for k, v in state.items()
+    }
+    return json.dumps(state)
+
+
+def deserializeGym(state):
+
+    def _deserializeArray(arr):
+        return np.array(arr, dtype=np.int16)
+    
+    state = json.loads(state)
+    for k in ["walls", "crates", "coins", "bombs", "explosions", "self_pos", "opponents_pos"]:
+        state[k] = _deserializeArray(state[k])
+    state["self_info"]["position"] = _deserializeArray(state["self_info"]["position"])
+    for opp in state["opponents_info"]:
+        opp["position"] = _deserializeArray(opp["position"])
+
+    return state

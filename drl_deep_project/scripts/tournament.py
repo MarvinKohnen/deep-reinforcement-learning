@@ -29,7 +29,7 @@ from argparsing import parse
 from render import QualificationGUI
 
 N_ENVS = 25
-PAIRING_CARDINALITY = 4
+PAIRING_CARDINALITY = 3
 LOG_PATH = Path(__file__).parent / "logs" / "tournament"
 logger = logging.getLogger(__name__)
 
@@ -60,6 +60,7 @@ def makeSingleEnv(
     env = gymnasium.make(
         "bomberman_rl/bomberman-v0", args=args
     )
+    env = FixedLengthOpponentsInfo(env, n_opponents=PAIRING_CARDINALITY) # fix sequence length in order for VecEnv to successfully operate on state space
     if args.video:
         env = RecordVideo(env, video_folder=args.video, name_prefix=name_prefix, episode_trigger=lambda _: True)
     return env
@@ -341,16 +342,10 @@ def tournament(competitors):
 if __name__ == "__main__":
     logging.basicConfig(filename=LOG_PATH / 'tournament.log', level=logging.INFO)
     logger.info('Started')
-    tournament(competitors=["assignment_session_1.AhDr",
-                            "assignment_session_1.AnHePa",
-                            "assignment_session_1.BlMe",
-                            "assignment_session_1.EiLüWi",
-                            "assignment_session_1.FeGeKo",
-                            "assignment_session_1.GrHiSc",
-                            "assignment_session_1.He",
-                            "assignment_session_1.HoHüWr",
-                            "assignment_session_1.HöPa",
-                            "assignment_session_1.Oe",
-                            "assignment_session_1.Ta"
-                            ])
+    tournament(competitors=[
+        "rule_based_agent",
+        "coin_collector_agent",
+        "peaceful_agent",
+        "random_agent",
+    ])
     
