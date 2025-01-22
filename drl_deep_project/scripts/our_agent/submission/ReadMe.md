@@ -1,6 +1,7 @@
 # Bomberman Challenge:
 
-This code was written and submitted by Julius Ferber, Marvin Kohnen and Moritz Gehring
+This code was written and submitted by Julius Ferber, Marvin Kohnen and Moritz Gehring.
+Code is also found at https://github.com/MarvinKohnen/deep-reinforcement-learning
 
 ### Contents:
 
@@ -37,7 +38,7 @@ The files are of the following structure:
                 ├── 📄 training_progress.png     # Plots for reward, loss, epsilon decay and episode length
                 ├── 📄 training_stats.json       # File for architecture, hyperparameters and training stats used for plotting
 
-📄 requirements.txt                          # Requirements for development environment 
+📄 requirements.txt                              # Requirements for development environment 
 
     
 
@@ -50,7 +51,11 @@ Key Components:
 - Added training and evaluating different agents by introducing new flags
 - Implements reward shaping and state optimization for the Bomberman environment
 
-### Instructions on how to train, run and test the agent:
+### Instructions on how to run our agent for the tournament:
+Copy the "our_agent" folder into bomberman_rl/envs/agent_code and hopefully you're done. 
+
+### Instructions on how to train, run and test the agent from our git repository:
+[Homedirectory for the following is drl_deep_project]
 
 Added flags, other than the ones given are:
 
