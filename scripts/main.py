@@ -68,7 +68,7 @@ def provideAgent(passive: bool):
 def main(argv=None):
     args = parse(argv)
     env = gymnasium.make("bomberman_rl/bomberman-v0", args=args)
-    env = FixedLengthOpponentsInfo(env)
+    env = FixedLengthOpponentsInfo(env, 4)
 
     # Notice that you can not use wrappers in the tournament!
     # However, you might wanna use this example interface to kickstart your experiments
