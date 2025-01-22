@@ -7,7 +7,7 @@ from bomberman_rl import ScoreRewardWrapper, RestrictedKeysWrapper, FlattenWrapp
 from argparsing import parse
 # from bomberman_rl.envs.agent_code.rule_based_agent.agent import Agent
 # from learning_agent.agent import Agent
-from our_agent.agent import Agent
+from bomberman_rl.envs.agent_code.our_agent.agent import Agent
 from our_agent.utils import TrainingLogger
 from our_agent.q_learning import Model
 
@@ -125,7 +125,7 @@ def provideAgent(passive: bool, weights: str = None, use_double_dqn: bool = Fals
 def main(argv=None):
     args = parse(argv)
     env = gymnasium.make("bomberman_rl/bomberman-v0", args=args)
-    env = FixedLengthOpponentsInfo(env)
+    env = FixedLengthOpponentsInfo(env, 4)
 
     # Notice that you can not use wrappers in the tournament!
     # However, you might wanna use this example interface to kickstart your experiments

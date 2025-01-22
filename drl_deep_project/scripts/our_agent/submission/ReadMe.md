@@ -13,27 +13,27 @@ The files are of the following structure:
         ├── 📄 the usual tex stuff...
 └── 📁 simple_dqn/ 
     └── 📁 models/                               # Directory for saved model weights
-        ├── 📄 dqn_20250114_195134.pt                # Single DQN model weights
+        ├── 📄 dqn_20250114_195134.pt            # Single DQN model weights
     └── 📁 training_logs/                        # Directory for training stats and plots   
-        ├── 📁 model_20250114_195134               # Folders for multiple training runs with the same model
-            ├── 📄 training_progress.png     # Plots for reward, loss, epsilon decay and episode length
-            ├── 📄 training_stats.json       # File for architecture, hyperparameters and training stats used for plotting
+        ├── 📁 model_20250114_195134             # Folders for multiple training runs with the same model
+            ├── 📄 training_progress.png         # Plots for reward, loss, epsilon decay and episode length
+            ├── 📄 training_stats.json           # File for architecture, hyperparameters and training stats used for plotting
     ├── 📄 agent.py                              # Main agent implementation with DQN/Double DQN support
     ├── 📄 utils.py                              # Training utilities and visualization tools
     └── 📄 q_learning.py                         # Single DQN implementation with prioritized experience replay
-└── 📁 improved_dqn/
+└── 📁 our_agent/
     ├── 📄 agent.py                              # Main agent implementation with DQN/Double DQN support
     ├── 📄 double_q_learning.py                  # Double DQN implementation with prioritized experience replay
     ├── 📄 q_learning.py                         # Single DQN implementation with prioritized experience replay
     ├── 📄 utils.py                              # Training utilities and visualization tools
     └── 📁 models/                               # Directory for saved model weights
-        ├── 📄 dqn_20250121_091828.pt               # Single DQN model weights
+        ├── 📄 dqn_20250121_091828.pt            # Single DQN model weights
     └── 📁 training_logs/                        # Directory for training stats and plots
-        ├── 📁 model_20250120_222919                 # Folder for each model   
-            ├── 📁 run_20250120_222919               # Folders for multiple training runs with the same model
+        ├── 📁 model_20250121_163646             # Folder for each model   
+            ├── 📁 run_20250121_163646           # Folders for multiple training runs with the same model
                 ├── 📄 training_progress.png     # Plots for reward, loss, epsilon decay and episode length
                 ├── 📄 training_stats.json       # File for architecture, hyperparameters and training stats used for plotting        
-            ├── 📁 run_20250121_091828               # Folders for multiple training runs with the same model
+            ├── 📁 run_20250121_212644           # Folders for multiple training runs with the same model
                 ├── 📄 training_progress.png     # Plots for reward, loss, epsilon decay and episode length
                 ├── 📄 training_stats.json       # File for architecture, hyperparameters and training stats used for plotting
 

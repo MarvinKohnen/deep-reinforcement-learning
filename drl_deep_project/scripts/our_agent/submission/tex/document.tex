@@ -68,16 +68,6 @@
 		\item INVALID\_ACTION: -0.5
 		\item KILLED\_OPPONENT: 5
 		\item CRATE\_DESTROYED: 1
-		\item GOT\_KILLED: -5
-		\item WAITED: -0.1
-		\item COIN\_FOUND: 1
-	\end{itemize}
-	
-	\begin{itemize}
-		\item COIN\_COLLECTED: 2
-		\item INVALID\_ACTION: -0.5
-		\item KILLED\_OPPONENT: 5
-		\item CRATE\_DESTROYED: 1
 		\item COIN\_FOUND: 1
 		\item GOT\_KILLED: -5
 		\item WAITED: -0.025
@@ -88,7 +78,7 @@
 		\item MOVED\_LEFT: -0.0125
 	\end{itemize}
 	
-	This reward shaping introduces a time penalty for every action, punishing the agent for any action it takes. The time penalty for moving is $-5/400$, i.e. the reward for getting killed divided by the maximum episode length.
+	This reward shaping also introduces a time penalty for every action, punishing the agent for any action it takes. The time penalty for moving is $-5/400$, i.e. the reward for getting killed divided by the maximum episode length.
 	
 	The idea behind this is that the agent should still prioritise surviving, as the cumulative reward for surviving the entire episode is still greater or equal to the reward for dying, i.e. the agent should never end in a local minimum of $-5$ by just blowing itself up immediately. 
 	The negative reward for waiting is doubled, encouraging the agent to do aything of value (allowing for more exploration of the state space) unless it leads to a negative reward (i.e.\ walking into an explosion).
@@ -205,7 +195,7 @@
 	
 	\subsection{Best Performing Agent}
 	Lastly, we want to show the the learning curve and stats of our best performing agent, which will compete in the tournament. 
-	The first training resulted in the data in Figure \ref{fig:4}. We then finetuned the model and reiterated training, since the agent was a bit to aggressive and prioritized chasing rewards over its own safety. 
+	The first training resulted in the data in Figure \ref{fig:5}. We then finetuned the model and reiterated training, since the agent was a bit to aggressive and prioritized chasing rewards over its own safety. Finetuning results are shown in Figure \ref{fig:4}.
 		\begin{figure}[h!]
 		\centering
 		\includegraphics[width=1.0\textwidth]{images/best_training_results}
@@ -213,7 +203,7 @@
 		\label{fig:5}
 	\end{figure}
 	
-	The code for this model is found in the folder "improved\_dqn".
+	The code for this model is found in the folder "our\_agent".
 	
 	
 	

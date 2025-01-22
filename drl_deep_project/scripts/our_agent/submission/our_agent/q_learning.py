@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
+import os
 
 from bomberman_rl import ActionSpace
 
@@ -300,14 +301,14 @@ class Model():
 
     def save_weights(self):
         """Save model with new timestamp"""
-        save_dir = Path("scripts/our_agent/models")
+        save_dir = Path(os.path.dirname(os.path.abspath(__file__))) / "models"
         save_dir.mkdir(exist_ok=True)
         filename = f"dqn_{self.training_timestamp}.pt"
         torch.save(self.policy_net.state_dict(), save_dir / filename)
 
     def load_weights(self, suffix=None):
         """Load model weights from a specific version or most recent"""
-        save_dir = Path("scripts/our_agent/models")
+        save_dir = Path(os.path.dirname(os.path.abspath(__file__))) / "models"
         
         if suffix:
             filename = f"dqn_{suffix}.pt"

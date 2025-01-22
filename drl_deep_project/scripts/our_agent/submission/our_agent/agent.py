@@ -20,7 +20,7 @@ class Agent(LearningAgent):
     The example training loop in main.py supports this interface as well by calling the respective callbacks.
     (Demonstration only - do not inherit)
     """
-    def __init__(self, weights=None, use_double_dqn=False):
+    def __init__(self, weights="20250121_212644", use_double_dqn=False):
         # Define reward mapping as class attribute
         self.reward_mapping = {
             e.COIN_COLLECTED:2,
@@ -32,17 +32,15 @@ class Agent(LearningAgent):
             e.WAITED: -0.1,
         }
         self.use_double_dqn = use_double_dqn
-        ModelClass = DoubleDQN if use_double_dqn else SingleDQN
-        self.q_learning = ModelClass(weights_suffix=weights)
-        self.setup()
+        self.setup(weights)
         self.setup_training()
 
-    def setup(self):
+    def setup(self, weights):
         """
         Before episode. Use this to setup action related state that is required to act on the environment.
         """
         ModelClass = DoubleDQN if self.use_double_dqn else SingleDQN
-        self.q_learning = ModelClass()
+        self.q_learning = ModelClass(weights_suffix=weights)
 
 
     def act(self, state, **kwargs) -> int:

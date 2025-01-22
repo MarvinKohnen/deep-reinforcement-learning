@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
+import os 
 
 from bomberman_rl import ActionSpace
 
@@ -323,7 +324,7 @@ class Model():
 
     def save_weights(self):
         """Save both networks"""
-        save_dir = Path("scripts/our_agent/models")
+        save_dir = Path(os.path.dirname(os.path.abspath(__file__))) / "models"
         save_dir.mkdir(exist_ok=True)
         filename_a = f"dqn_a_{self.training_timestamp}.pt"
         filename_b = f"dqn_b_{self.training_timestamp}.pt"
@@ -332,7 +333,7 @@ class Model():
 
     def load_weights(self, suffix=None):
         """Load both networks"""
-        save_dir = Path("scripts/our_agent/models")
+        save_dir = Path(os.path.dirname(os.path.abspath(__file__))) / "models"
         
         if suffix:
             filename_a = f"dqn_a_{suffix}.pt"

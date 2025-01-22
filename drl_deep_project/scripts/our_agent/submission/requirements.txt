@@ -47,3 +47,5 @@ tqdm==4.67.1
 traitlets==5.14.3
 typing_extensions==4.12.2
 wcwidth==0.2.13
+psutil==5.9.5
+gputil==1.4.0
