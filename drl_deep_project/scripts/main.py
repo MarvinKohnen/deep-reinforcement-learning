@@ -7,7 +7,7 @@ from bomberman_rl import ScoreRewardWrapper, RestrictedKeysWrapper, FlattenWrapp
 from argparsing import parse
 # from bomberman_rl.envs.agent_code.rule_based_agent.agent import Agent
 # from learning_agent.agent import Agent
-from bomberman_rl.envs.agent_code.our_agent.agent import Agent
+from our_agent.agent import Agent
 from our_agent.utils import TrainingLogger
 from our_agent.q_learning import Model
 
